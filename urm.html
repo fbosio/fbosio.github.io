@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="author" content="Fede Bosio">
+    <meta name="description"
+     content="Simulator of the Uniform Rectilinear Motion, the dumbest motion in the Universe.">
+    <title>Meeting of particles (Uniform Rectilinear Motion)</title>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('input[type="range"]').forEach(
+          function (range) {
+            const output = document.querySelector('#' + range.id + '-output');
+            const unit = output.textContent;
+            output.textContent = range.value + ' ' + unit;
+            range.addEventListener('input', function () {
+              output.textContent = range.value + ' ' + unit;
+            });
+          }
+        );
+
+        let t, tMax, d, dMax, x1, x2, v1, v2, tIntersection, xIntersection;
+        const time = document.querySelector('#time');
+        time.addEventListener('input', function (event) {
+          t = parseFloat(event.target.value);
+          update();
+        });
+
+        function update() {
+          tMax = parseFloat(time.max);
+
+          const distance = document.querySelector('#distance')
+          d = parseFloat(distance.value);
+          dMax = parseFloat(distance.max);
+          v1 = parseFloat(document.querySelector('#speed1').value);
+          v2 = parseFloat(document.querySelector('#speed2').value
+                          * (document.querySelector('#invert2').checked ? -1
+                                                                        : 1));
+
+          x1 = v1 * t;
+          if (x1 > dMax) x1 = dMax;
+          x2 = d + v2*t;
+          if (x2 < 0) x2 = 0;
+          if (x2 > dMax) x2 = dMax;
+
+          if (v1 > v2) {
+            tIntersection = d / (v1-v2);
+            xIntersection = v1 * tIntersection;
+          }
+          if ((v1 <= v2) || (xIntersection > dMax)) {
+            tIntersection = undefined;
+            xIntersection = undefined;
+          }
+
+          writeEquations();
+          draw();
+        }
+
+        function writeEquations() {
+          document.querySelector('#speed1-equation').value = v1;
+          let v2Prefix;
+          if (v2 < 0)
+            v2Prefix = '-'
+          else
+            v2Prefix = '+'
+          document.querySelector('#speed2-equation').value = v2Prefix
+                                                             + ' '
+                                                             + Math.abs(v2);
+          document.querySelector('#distance-equation').value = d;
+        }
+
+        t = 0;
+        update();
+
+        document.querySelectorAll('input').forEach(
+          function (range) {
+            range.addEventListener('input', update);
+          }
+        );
+
+        let playingInterval;
+        document.querySelector('#play').addEventListener('click',
+          function (event) {
+            if (playingInterval) {
+              pause();
+            } else {
+              playingInterval = window.setInterval(function () {
+                t = parseFloat(time.value) + 0.01;
+                update();
+                if (t >= tMax) {
+                  t = tMax;
+                  pause();
+                }
+                time.value = t;
+                let tOutput = Math.round(t*1e2) / 1e2 + ' s';
+                document.querySelector('#time-output').textContent = tOutput;
+              }, 10);
+              event.target.value = 'Pause';
+            }
+          }
+        );
+
+        function pause() {
+          window.clearInterval(playingInterval);
+          playingInterval = undefined;
+          document.querySelector('#play').value = 'Play';
+        }
+
+        document.querySelector('#stop').addEventListener('click',
+          function(event) {
+            t = 0;
+            time.value = 0;
+            pause();
+            update();
+          }
+        );
+        
+        function draw() {
+          const canvas = document.querySelector('#canvas');
+          if (!canvas.getContext)
+            return;
+          const ctx = canvas.getContext('2d');
+          
+          const width = canvas.width;
+          const height = canvas.height;
+          
+          ctx.clearRect(0, 0, width, height);
+          
+          const fontHeight = 16;
+          const horizontalPadding = 0.1 * width;
+          const verticalSeparation = height / 5;
+          const lineWidth = width - 2*horizontalPadding;
+          const radius = 5;
+          const intersectionColor = '#FF8000';
+          const plotTop = 2 * verticalSeparation
+          const bottom = verticalSeparation * 5 / 2;
+          const plotHeight = bottom - plotTop;
+          
+          ctx.font = fontHeight + 'px sans-serif';
+
+          // Kinematic objects
+          for (const iterData of [[1, x1, 'red'], [3, x2, 'green']]) {
+            ctx.save();
+            ctx.translate(horizontalPadding,
+                          verticalSeparation * iterData[0] / 2);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(lineWidth, 0);
+            ctx.strokeStyle = 'blue';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(iterData[1], 0, radius, 0, Math.PI * 2);
+            ctx.fillStyle = iterData[2];
+            ctx.fill();
+
+            ctx.restore();
+          }
+
+          ctx.save();
+          ctx.translate(horizontalPadding, verticalSeparation + fontHeight/2);
+          ctx.fillStyle = 'blue';
+          ctx.fillText('O', 0, 0);
+          ctx.fillText('P', d, 0);
+          if (x1 >= x2) {
+            ctx.fillStyle = intersectionColor;
+            ctx.fillText('M', xIntersection, 0);
+          }
+          ctx.restore();
+
+          // Cartesian axes
+          ctx.save()
+          ctx.translate(horizontalPadding, plotTop);
+
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0, bottom);  // Y axis
+          ctx.lineTo(lineWidth, bottom);  // X axis
+          ctx.stroke();
+
+          const numberXLabels = 10;
+          const numberYLabels = 7;
+
+          for (let i = 0; i <= numberXLabels; i++) {
+            let k = i / numberXLabels;
+            let label = Math.round(tMax*k);
+            ctx.fillText(label, lineWidth*k, bottom + verticalSeparation/4);
+          }
+
+          for (let i = 0; i <= numberYLabels; i++) {
+            let k = i / numberYLabels;
+            let label = Math.round(dMax*k);
+            ctx.fillText(label, -horizontalPadding/2, bottom*(1-k));
+          }
+
+          let xPlot = (t/tMax) * lineWidth;
+          let yPlot;
+
+          ctx.beginPath()
+          ctx.moveTo(0, bottom);
+          yPlot = bottom * (1-x1/dMax);
+          if (x1 >= dMax)
+            ctx.lineTo(((x1/v1)/tMax) * lineWidth, yPlot);
+          ctx.lineTo(xPlot, yPlot);
+          ctx.strokeStyle = 'red';
+          ctx.stroke();
+
+          ctx.beginPath()
+          ctx.moveTo(0, bottom * (1-d/dMax));
+          yPlot = bottom * (1-x2/dMax);
+          if ((x2 <= 0) || (x2 >= dMax))
+            ctx.lineTo(((x2-d)/v2)/tMax * lineWidth, yPlot);
+          ctx.lineTo(xPlot, yPlot);
+          ctx.strokeStyle = 'green';
+          ctx.stroke();
+
+          
+          if (x1 >= x2) {
+            ctx.beginPath();
+            ctx.arc((tIntersection/tMax) * lineWidth,
+                    (1-xIntersection/dMax) * bottom, radius, 0, 2*Math.PI);
+            ctx.fillStyle = intersectionColor;
+            ctx.fill();
+          }
+
+          ctx.restore()
+        }
+
+        draw();
+      });
+    </script>
+  </head>
+  <body>
+    <p>
+      <label for="distance">Initial distance:</label>
+      <input type="range" name="distance" id="distance" min="0" max="510"
+       step="1" value="255">
+      <output id="distance-output" for="distance">m</output>
+    </p>
+    <p>
+      <label for="speed1">Speed of particle 1:</label>
+      <input type="range" name="speed1" id="speed1" min="0" max="100" step="1"
+       value="50">
+      <output id="speed1-output" for="speed1">m/s</output>
+    </p>
+
+    <p>
+      <label for="speed2">Speed of particle 2:</label>
+      <input type="range" name="speed2" id="speed2" min="0" max="100" step="1"
+       value="50">
+      <output id="speed2-output" for="speed2">m/s</output>
+
+      <input type="checkbox" id="invert2" name="invert2" checked>
+      <label for="invert2">Reverse</label>
+    </p>
+
+    <p>
+      Equations of motion:
+
+      <span style="color: red;">
+        <var>x</var><sub>1</sub>(<var>t</var>)
+        = <output id="speed1-equation">v1</output> · <var>t</var>,
+      </span>
+      
+      <span style="color: green;">
+        <var>x</var><sub>2</sub>(<var>t</var>)
+        = <output id="distance-equation">d</output>
+          <output id="speed2-equation">v2</output> · <var>t</var>,
+      </span>
+    </p>
+
+    <p>
+      <label for="time">Time:</label>
+      <input type="range" name="time" id="time" min="0" max="30" step="0.01"
+       value="0">
+      <output id="time-output" for="time">s</output>
+    </p>
+
+    <p>
+      <input type="button" id="play" value="Play">
+      <input type="button" id="stop" value="Reset">
+    </p>
+
+    <p>
+      <canvas id="canvas" width="640" height="480"
+      style="border: 1px solid black;">HTML5 required.</canvas>
+    </p>
+
+    <p>
+      <ul>
+        <li>O = origin = initial position of particle 1.</li>
+        <li>P = initial position of particle 2.</li>
+      </ul>
+    </p>
+
+    <p>by Fede Bosio, 2021.</p>
+  </body>
+</html>
