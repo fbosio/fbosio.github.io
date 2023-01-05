@@ -1,0 +1,22 @@
+header .picture {
+    float: right;
+}
+
+.footer-box {
+    display: table;
+    width: 100%;
+}
+
+.footer-box-left, .footer-box-right {
+    display: table-cell;
+    vertical-align: middle;
+    width: 50%;
+}
+
+.footer-box-left {
+    text-align: left;
+}
+
+.footer-box-right {
+    text-align: right;
+}
