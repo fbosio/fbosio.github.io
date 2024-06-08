@@ -3,6 +3,7 @@ header {
         padding: 0px;
     }
     th {
+        font-weight: 400;
         vertical-align: middle;
     }
     h1 {
