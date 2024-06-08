@@ -1,5 +1,13 @@
-header .picture {
-    float: right;
+header {
+    table, td, th {
+        padding: 0px;
+    }
+    th {
+        vertical-align: middle;
+    }
+    h1 {
+        margin: 0px;
+    }
 }
 
 .footer-box {
