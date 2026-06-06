@@ -4,7 +4,6 @@
  * from blackscholes.js, and writes results into the DOM.
  * The math engine (blackscholes.js) never touches the DOM.
  */
-
 document.addEventListener('DOMContentLoaded', function () {
   'use strict';
 
@@ -14,7 +13,8 @@ document.addEventListener('DOMContentLoaded', function () {
     K: document.getElementById('input-strike'),
     r: document.getElementById('input-rate'),
     sigma: document.getElementById('input-volatility'),
-    T: document.getElementById('input-time')
+    T: document.getElementById('input-time'),
+    marketprice: document.getElementById('input-marketprice')
   };
 
   // ----- Output element references -----
@@ -23,7 +23,8 @@ document.addEventListener('DOMContentLoaded', function () {
     d1: document.getElementById('output-d1'),
     d2: document.getElementById('output-d2'),
     Nd1: document.getElementById('output-nd1'),
-    Nd2: document.getElementById('output-nd2')
+    Nd2: document.getElementById('output-nd2'),
+    impliedSigma: document.getElementById('implied-sigma-output')
   };
 
   // ----- Error message elements -----
@@ -32,8 +33,18 @@ document.addEventListener('DOMContentLoaded', function () {
     K: document.getElementById('error-strike'),
     r: document.getElementById('error-rate'),
     sigma: document.getElementById('error-volatility'),
-    T: document.getElementById('error-time')
+    T: document.getElementById('error-time'),
+    marketprice: document.getElementById('error-marketprice')
   };
+
+  // ----- View toggling nodes -----
+  var callOutputCard = document.getElementById('card-call-output');
+  var impliedOutputCard = document.getElementById('card-implied-output');
+  var sigmaGroup = document.getElementById('sigma-group');
+  var marketpriceGroup = document.getElementById('marketprice-group');
+
+  // Current view state
+  var currentView = 'call';   // 'call' or 'implied'
 
   // ----- Helper functions -----
 
@@ -62,7 +73,9 @@ document.addEventListener('DOMContentLoaded', function () {
     outputs.Nd2.textContent = '\u2014';
   }
 
-  // ----- Main computation function -----
+  // ----- Main computation functions -----
+
+  /** Standard call valuation. */
   function compute() {
     clearErrors();
 
@@ -77,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var invalid = false;
 
     if (isNaN(S0) || S0 <= 0) {
-      showError('S0', 'Spot price S₀ must be greater than 0.');
+      showError('S0', 'Spot price S\u2080 must be greater than 0.');
       invalid = true;
     }
     if (isNaN(K) || K <= 0) {
@@ -89,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
       invalid = true;
     }
     if (isNaN(sigma) || sigma <= 0) {
-      showError('sigma', 'Volatility σ must be greater than 0.');
+      showError('sigma', 'Volatility \u03C3 must be greater than 0.');
       invalid = true;
     }
     if (isNaN(T) || T <= 0) {
@@ -119,20 +132,121 @@ document.addEventListener('DOMContentLoaded', function () {
     outputs.Nd2.textContent = result.Nd2.toFixed(4);
   }
 
+  /** Implied volatility computation. */
+  function computeImplied() {
+    clearErrors();
+
+    var S0 = parseFloat(inputs.S0.value);
+    var K = parseFloat(inputs.K.value);
+    var r = parseFloat(inputs.r.value);
+    var T = parseFloat(inputs.T.value);
+    var marketPrice = parseFloat(inputs.marketprice.value);
+
+    var invalid = false;
+
+    if (isNaN(S0) || S0 <= 0) {
+      showError('S0', 'Spot price S\u2080 must be greater than 0.');
+      invalid = true;
+    }
+    if (isNaN(K) || K <= 0) {
+      showError('K', 'Exercise price must be greater than 0.');
+      invalid = true;
+    }
+    if (isNaN(r)) {
+      showError('r', 'Rate must be a number.');
+      invalid = true;
+    }
+    if (isNaN(T) || T <= 0) {
+      showError('T', 'Time to maturity t must be greater than 0.');
+      invalid = true;
+    }
+    if (isNaN(marketPrice) || !isFinite(marketPrice) || marketPrice < 0) {
+      if (inputs.marketprice.value.trim() === '') {
+        showError('marketprice', 'Market call price is required.');
+      } else {
+        showError('marketprice', 'Market call price must be a non‑negative number.');
+      }
+      invalid = true;
+    }
+
+    if (invalid) {
+      outputs.impliedSigma.textContent = '\u2014';
+      return;
+    }
+
+    var result = impliedVolatilityCall({
+      S0: S0,
+      K: K,
+      r: r,
+      T: T,
+      marketPrice: marketPrice
+    });
+
+    if (result.sigma !== null && result.converged) {
+      outputs.impliedSigma.textContent = result.sigma.toFixed(4);
+    } else {
+      outputs.impliedSigma.textContent = 'N/A';
+      if (result.reason) {
+        showError('marketprice', 'Computation failed: ' + result.reason);
+      }
+    }
+  }
+
+  /** Route recalculation to the active view. */
+  function recalculate() {
+    if (currentView === 'implied') {
+      computeImplied();
+    } else {
+      compute();
+    }
+  }
+
+  // ----- Hash-based view toggle -----
+  function applyView(view) {
+    currentView = view;
+    clearErrors();
+
+    if (view === 'implied') {
+      callOutputCard.style.display = 'none';
+      impliedOutputCard.style.display = '';
+      sigmaGroup.style.display = 'none';
+      marketpriceGroup.style.display = '';
+    } else {
+      callOutputCard.style.display = '';
+      impliedOutputCard.style.display = 'none';
+      sigmaGroup.style.display = '';
+      marketpriceGroup.style.display = 'none';
+    }
+    recalculate();
+  }
+
+  function handleHashChange() {
+    var hash = location.hash;
+    if (hash === '#implied-volatility') {
+      applyView('implied');
+    } else {
+      applyView('call');
+    }
+  }
+
   // ----- Set sensible default values (demo) -----
   inputs.S0.value = '100';
   inputs.K.value = '100';
   inputs.r.value = '0.05';
   inputs.sigma.value = '0.2';
   inputs.T.value = '1';
+  // marketprice input initially empty
 
   // ----- Bind input events for live recalculation -----
   for (var key in inputs) {
     if (inputs.hasOwnProperty(key) && inputs[key]) {
-      inputs[key].addEventListener('input', compute);
+      inputs[key].addEventListener('input', function() {
+        recalculate();
+      });
     }
   }
 
-  // ----- Compute initial result -----
-  compute();
+  // ----- Hash routing -----
+  window.addEventListener('hashchange', handleHashChange);
+  handleHashChange();   // initial view evaluation
 });
