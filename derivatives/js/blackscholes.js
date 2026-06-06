@@ -1,4 +1,13 @@
 /**
+ * Black‑Scholes‑Merton European call pricing and generic single‑variable solver.
+ *
+ * This file provides:
+ *   - Standard Black‑Scholes call price (blackScholesCallPrice).
+ *   - A generic bisection solver for any variable (S0,K,r,σ,T,C).
+ *   - Legacy wrapper impliedVolatilityCall for backwards compatibility.
+ */
+
+/**
  * Compute d1 parameter of Black-Scholes (Hull notation).
  * Formula: d1 = [ln(S0/K) + (r + sigma^2 / 2) * T] / (sigma * sqrt(T))
  *
@@ -108,7 +117,152 @@ function blackScholesCallPrice(S0, K, r, sigma, T) {
   };
 }
 
-// ---- Phase 1: implied volatility (bisection) ----
+/* ----------------------------------------------------------------- */
+/*  Generic single‑variable bisection solver                         */
+/* ----------------------------------------------------------------- */
+
+/**
+ * Solve for the given variable so that the Black‑Scholes call price
+ * equals `marketPrice`.  Bisection is used, which requires a continuous,
+ * monotonic relation between the variable and the call price.
+ *
+ * @param {Object} input
+ * @param {string} input.variable   - One of 'S0','K','r','sigma','T','callPrice'.
+ * @param {number} input.S0         - Spot price (ignored if solving for S0).
+ * @param {number} input.K          - Strike price (ignored if solving for K).
+ * @param {number} input.r          - Risk‑free rate (ignored if solving for r).
+ * @param {number} input.sigma      - Volatility (ignored if solving for σ).
+ * @param {number} input.T          - Time to maturity (ignored if solving for T).
+ * @param {number} input.marketPrice - Observed call price.
+ * @param {number} [input.maxIter=100] - Maximum bisection iterations.
+ * @param {number} [input.tolerance=1e-6] - Convergence tolerance on price error.
+ *
+ * @returns {object} result with { converged, value?, sigma?, c?, reason?, iterations? }
+ */
+function solveForVariable(input) {
+  var variable = input.variable;
+  var S0 = input.S0;
+  var K = input.K;
+  var r = input.r;
+  var sigma = input.sigma;
+  var T = input.T;
+  var marketPrice = input.marketPrice;
+  var maxIter = input.maxIter || 100;
+  var tol = input.tolerance || 1e-6;
+
+  // ----- helpers -----
+  function invalid(reason) {
+    return { converged: false, reason: reason };
+  }
+
+  // ----- Fast path : the variable we are solving for is the call price itself -----
+  if (variable === 'callPrice') {
+    var callObj = blackScholesCallPrice(S0, K, r, sigma, T);
+    if (isNaN(callObj.c)) return invalid('Cannot compute call price.');
+    return { converged: true, value: callObj.c, c: callObj.c, iterations: 0 };
+  }
+
+  // ----- Validate the fields that are NOT being solved -----
+  var dummy = {
+    S0:    (variable === 'S0')    ? 1.0  : S0,
+    K:     (variable === 'K')     ? 1.0  : K,
+    r:     (variable === 'r')     ? 0.05 : r,
+    sigma: (variable === 'sigma') ? 0.2  : sigma,
+    T:     (variable === 'T')     ? 1.0  : T
+  };
+  var validation = validateInputs(dummy);
+  if (validation !== null) {
+    return invalid(validation.join('; '));
+  }
+  if (typeof marketPrice !== 'number' || isNaN(marketPrice) || !isFinite(marketPrice) || marketPrice < 0) {
+    return invalid('Market price must be ≥ 0.');
+  }
+
+  // ----- price‑error function f(guess) = C(guess) - marketPrice -----
+  function priceError(guess) {
+    var call;
+    if (variable === 'S0') {
+      call = blackScholesCallPrice(guess, K, r, sigma, T);
+    } else if (variable === 'K') {
+      call = blackScholesCallPrice(S0, guess, r, sigma, T);
+    } else if (variable === 'r') {
+      call = blackScholesCallPrice(S0, K, guess, sigma, T);
+    } else if (variable === 'sigma') {
+      call = blackScholesCallPrice(S0, K, r, guess, T);
+    } else if (variable === 'T') {
+      call = blackScholesCallPrice(S0, K, r, sigma, guess);
+    } else {
+      return NaN;
+    }
+    return call.c - marketPrice;
+  }
+
+  // ----- choose initial bracket -----
+  var low, high;
+  if (variable === 'S0')          { low = 0.0001; high = Math.max(100000, 10 * K); }
+  else if (variable === 'K')     { low = 0.0001; high = Math.max(100000, 10 * S0); }
+  else if (variable === 'r')     { low = -1.0;   high = 5.0; }
+  else if (variable === 'T')     { low = 0.0001; high = 10.0; }
+  else if (variable === 'sigma') { low = 1e-4;   high = 4.0; }
+  else { return invalid('unknown variable'); }
+
+  // ----- expand bracket until f(low) and f(high) have opposite signs -----
+  function f(x) { return priceError(x); }
+  var fl = f(low);
+  var fh = f(high);
+  if (isNaN(fl) || isNaN(fh)) return invalid('Evaluation error at bracket edges.');
+
+  for (var expand = 0; expand < 30; expand++) {
+    if (fl * fh <= 0) break;
+    if (Math.abs(fl) < Math.abs(fh)) {
+      low = low / 2.0;
+      fl = f(low);
+    } else {
+      high = high * 2.0;
+      fh = f(high);
+    }
+    if (isNaN(fl) || isNaN(fh)) return invalid('Evaluation error while expanding bracket.');
+  }
+  if (fl * fh > 0) return invalid('no_bracket');
+
+  // ----- bisection -----
+  var l = low, h = high;
+  var fl2 = fl, fh2 = fh;
+  for (var iter = 1; iter <= maxIter; iter++) {
+    var mid = (l + h) / 2.0;
+    var fm = f(mid);
+    if (isNaN(fm)) return invalid('NaN during bisection.');
+    if (Math.abs(fm) <= tol) {
+      // also compute the call price that corresponds to the solved value
+      var callVal;
+      if (variable === 'S0')    callVal = blackScholesCallPrice(mid, K, r, sigma, T);
+      else if (variable === 'K') callVal = blackScholesCallPrice(S0, mid, r, sigma, T);
+      else if (variable === 'r') callVal = blackScholesCallPrice(S0, K, mid, sigma, T);
+      else if (variable === 'sigma') callVal = blackScholesCallPrice(S0, K, r, mid, T);
+      else if (variable === 'T') callVal = blackScholesCallPrice(S0, K, r, sigma, mid);
+      return {
+        converged: true,
+        value: mid,
+        sigma: (variable === 'sigma' ? mid : undefined),   // backwards‑compat for old IV caller
+        c: callVal ? callVal.c : NaN,
+        iterations: iter
+      };
+    }
+    if (fl2 * fm <= 0.0) {
+      h = mid;
+      fh2 = fm;
+    } else {
+      l = mid;
+      fl2 = fm;
+    }
+  }
+
+  return { converged: false, reason: 'max_iterations', iterations: maxIter };
+}
+
+/* ----------------------------------------------------------------- */
+/*  Legacy implied‑volatility wrapper (unchanged signature)          */
+/* ----------------------------------------------------------------- */
 
 /**
  * Implied volatility of a European call under Black–Scholes.
@@ -125,7 +279,7 @@ function blackScholesCallPrice(S0, K, r, sigma, T) {
  *
  * @returns {Object} result
  */
-function impliedVolatilityCall(params) {
+function impliedVolatilityCall(params, options) {
   // ----- helpers -----
   function invalid(reason) {
     return { sigma: null, converged: false, reason: reason };
@@ -147,9 +301,15 @@ function impliedVolatilityCall(params) {
   var discount = Math.exp(-r * T);
   var lowerBound = Math.max(S0 - K * discount, 0);
   var upperBound = S0;
-  var eps = 1e-8;                     // used to treat exact bounds as valid
+  var eps = 1e-8;
   if (marketPrice < lowerBound - eps || marketPrice > upperBound + eps) {
     return invalid('no_arbitrage_violation');
+  }
+
+  // If the market price equals (or is extremely close to) the upper bound,
+  // no finite volatility can reproduce it → no bracket.
+  if (marketPrice >= upperBound - 1e-12) {
+    return invalid('no_bracket');
   }
 
   // ----- optional parameters -----
@@ -157,54 +317,27 @@ function impliedVolatilityCall(params) {
   var maxIter = opts.maxIterations !== undefined ? opts.maxIterations : 50;
   var tol    = opts.priceTolerance !== undefined ? opts.priceTolerance : 1e-5;
 
-  // ----- price‑error function f(σ) = C(σ) - marketPrice -----
-  function priceDiff(sigma) {
-    var call = blackScholesCallPrice(S0, K, r, sigma, T);
-    return call.c - marketPrice;
+  // delegate to the generic solver
+  var sol = solveForVariable({
+    variable: 'sigma',
+    S0: S0,
+    K: K,
+    r: r,
+    sigma: undefined,          // not used, internally replaced by guess
+    T: T,
+    marketPrice: marketPrice,
+    maxIter: maxIter,
+    tolerance: tol
+  });
+
+  if (!sol.converged) {
+    return invalid(sol.reason || 'unknown');
   }
+  return { sigma: sol.value, converged: true, iterations: sol.iterations };
+}
 
-  // ----- initial bracket -----
-  var sigmaLow  = 1e-4;
-  var sigmaHigh = 4.0;
-
-  var fLow  = priceDiff(sigmaLow);
-  var fHigh = priceDiff(sigmaHigh);
-
-  if (isNaN(fLow) || isNaN(fHigh)) {
-    return invalid('no_bracket');
-  }
-
-  if (fLow * fHigh > 0) {
-    return invalid('no_bracket');
-  }
-
-  // ----- bisection -----
-  var low = sigmaLow;
-  var high = sigmaHigh;
-  var fL  = fLow;
-  var fH  = fHigh;
-
-  for (var iter = 1; iter <= maxIter; iter++) {
-    var sigmaMid = (low + high) / 2;
-    var fMid     = priceDiff(sigmaMid);
-
-    if (isNaN(fMid)) {
-      return invalid('no_bracket');
-    }
-
-    if (Math.abs(fMid) <= tol) {
-      return { sigma: sigmaMid, converged: true, iterations: iter };
-    }
-
-    if (fL * fMid <= 0) {
-      high = sigmaMid;
-      fH   = fMid;
-    } else {
-      low = sigmaMid;
-      fL  = fMid;
-    }
-  }
-
-  // maximum iterations reached without convergence
-  return { sigma: null, converged: false, iterations: maxIter, reason: 'max_iterations' };
+// Ensure the functions are accessible from other scripts (e.g. ui.js)
+if (typeof window !== 'undefined') {
+  window.impliedVolatilityCall = impliedVolatilityCall;
+  window.solveForVariable = solveForVariable;
 }

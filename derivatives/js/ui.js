@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var solveTarget = 'callPrice';   // default unknown
   var lastCallPrice = null;        // most recent call price computed
+  var lastSigma = null;           // most recent volatility computed
 
   var supportedTargets = ['callPrice', 'sigma'];
 
@@ -110,6 +111,11 @@ document.addEventListener('DOMContentLoaded', function () {
       // the market‑price input with the last known callPrice.
       if (solveTarget !== 'callPrice' && lastCallPrice !== null && !isNaN(lastCallPrice)) {
         inputs.marketprice.value = lastCallPrice.toFixed(6);
+      }
+      // When switching to callPrice, pre‑fill the volatility input with the
+      // most recently computed implied volatility (if any).
+      if (solveTarget === 'callPrice' && lastSigma !== null && !isNaN(lastSigma)) {
+        inputs.sigma.value = lastSigma.toFixed(6);
       }
       updateSolveUIVisibility();
       computeSolve();
@@ -273,6 +279,18 @@ document.addEventListener('DOMContentLoaded', function () {
     // store the latest call price
     if (typeof result.c === 'number' && !isNaN(result.c)) {
       lastCallPrice = result.c;
+    }
+    // store the latest sigma (if we solved for it)
+    if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
+      lastSigma = result.value;
+    }
+
+    // ---- immediately fill the corresponding input so switching works perfectly ----
+    if (solveTarget === 'callPrice' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.marketprice.value = result.value.toFixed(6);
+    }
+    if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.sigma.value = result.value.toFixed(6);
     }
 
     // display the solved value (the card title already shows the variable name)
