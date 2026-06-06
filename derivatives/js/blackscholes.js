@@ -81,7 +81,7 @@ function blackScholesCallPrice(S0, K, r, sigma, T) {
   var validation = validateInputs({ S0: S0, K: K, r: r, sigma: sigma, T: T });
   if (validation !== null) {
     return {
-      price: NaN,
+      c: NaN,
       d1: NaN,
       d2: NaN,
       Nd1: NaN,
