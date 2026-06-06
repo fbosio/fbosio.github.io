@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var sigmaGroup = document.getElementById('sigma-group');
   var marketpriceGroup = document.getElementById('marketprice-group');
 
+  // ----- View switch buttons -----
+  var btnCall = document.getElementById('btn-call');
+  var btnImplied = document.getElementById('btn-implied');
+
   // Current view state
   var currentView = 'call';   // 'call' or 'implied'
 
@@ -164,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (inputs.marketprice.value.trim() === '') {
         showError('marketprice', 'Market call price is required.');
       } else {
-        showError('marketprice', 'Market call price must be a non‑negative number.');
+        showError('marketprice', 'Market call price must be a non\u2010negative number.');
       }
       invalid = true;
     }
@@ -201,17 +205,55 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // ----- Hash-based view toggle -----
+  // ===== View switch helpers =====
+
+  /** Update the active state of the switch buttons. */
+  function setActiveButton(view) {
+    if (view === 'implied') {
+      btnCall.setAttribute('aria-selected', 'false');
+      btnImplied.setAttribute('aria-selected', 'true');
+      btnCall.classList.remove('active');
+      btnImplied.classList.add('active');
+    } else {
+      btnCall.setAttribute('aria-selected', 'true');
+      btnImplied.setAttribute('aria-selected', 'false');
+      btnCall.classList.add('active');
+      btnImplied.classList.remove('active');
+    }
+  }
+
+  /** Apply the given view (call or implied). */
   function applyView(view) {
     currentView = view;
     clearErrors();
+    setActiveButton(view);
 
+    // When switching to implied, seed the market price with the current call value.
     if (view === 'implied') {
+      var S0 = parseFloat(inputs.S0.value);
+      var K  = parseFloat(inputs.K.value);
+      var r  = parseFloat(inputs.r.value);
+      var sigma = parseFloat(inputs.sigma.value);
+      var T  = parseFloat(inputs.T.value);
+      if (!isNaN(S0) && S0 > 0 && !isNaN(K) && K > 0 && !isNaN(r) && !isNaN(sigma) && sigma > 0 && !isNaN(T) && T > 0) {
+        var call = blackScholesCallPrice(S0, K, r, sigma, T);
+        if (call && !isNaN(call.c)) {
+          inputs.marketprice.value = call.c.toFixed(6);
+        }
+      }
       callOutputCard.style.display = 'none';
       impliedOutputCard.style.display = '';
       sigmaGroup.style.display = 'none';
       marketpriceGroup.style.display = '';
     } else {
+      // When switching back to call, seed sigma with the last implied volatility.
+      var impliedText = outputs.impliedSigma.textContent;
+      if (impliedText !== '\u2014' && impliedText !== 'N/A') {
+        var impliedVal = parseFloat(impliedText);
+        if (!isNaN(impliedVal)) {
+          inputs.sigma.value = impliedVal.toFixed(6);
+        }
+      }
       callOutputCard.style.display = '';
       impliedOutputCard.style.display = 'none';
       sigmaGroup.style.display = '';
@@ -220,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
     recalculate();
   }
 
+  /** Handle a change to the URL hash. */
   function handleHashChange() {
     var hash = location.hash;
     if (hash === '#implied-volatility') {
@@ -229,13 +272,29 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // ----- Button click handlers -----
+  btnCall.addEventListener('click', function () {
+    location.hash = '#call-value';
+  });
+
+  btnImplied.addEventListener('click', function () {
+    location.hash = '#implied-volatility';
+  });
+
   // ----- Set sensible default values (demo) -----
   inputs.S0.value = '100';
   inputs.K.value = '100';
   inputs.r.value = '0.05';
   inputs.sigma.value = '0.2';
   inputs.T.value = '1';
-  // marketprice input initially empty
+
+  // Compute a default market price consistent with the default volatility.
+  var defaultCall = blackScholesCallPrice(100, 100, 0.05, 0.2, 1);
+  if (defaultCall && !isNaN(defaultCall.c)) {
+    inputs.marketprice.value = defaultCall.c.toFixed(6);
+  } else {
+    inputs.marketprice.value = '10.450583'; // fallback
+  }
 
   // ----- Bind input events for live recalculation -----
   for (var key in inputs) {
@@ -248,5 +307,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ----- Hash routing -----
   window.addEventListener('hashchange', handleHashChange);
-  handleHashChange();   // initial view evaluation
+
+  // Set initial hash if none present
+  if (!location.hash || location.hash === '#') {
+    location.hash = '#call-value';
+  } else {
+    handleHashChange();
+  }
 });
