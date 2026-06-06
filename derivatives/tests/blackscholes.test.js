@@ -7,6 +7,9 @@
     tests.push({ name: name, fn: fn });
   }
 
+  // ============================================================
+  //  Call valuation
+  // ============================================================
   test("1. Classic at-the-money benchmark", function() {
     var result = blackScholesCallPrice(100, 100, 0.05, 0.2, 1);
     assertAlmostEqual(result.d1, 0.35, 1e-2, "d1");
@@ -76,4 +79,5 @@
   });
 
   window.blackScholesTests = tests;
+  window.callValuationTests = tests;
 })();

@@ -12,14 +12,18 @@
   <h2 id="header-cdf">Normal CDF</h2>
   <div id="results-cdf"></div>
   
-  <h2 id="header-bs">Black-Scholes</h2>
-  <div id="results-bs"></div>
+  <h2 id="header-call">Call valuation</h2>
+  <div id="results-call"></div>
+  
+  <h2 id="header-iv">Implied volatility</h2>
+  <div id="results-iv"></div>
 
   <script src="../js/normal-cdf.js"></script>
   <script src="../js/blackscholes.js"></script>
   <script src="test-utils.js"></script>
   <script src="normal-cdf.test.js"></script>
   <script src="blackscholes.test.js"></script>
+  <script src="implied-volatility.test.js"></script>
   <script>
     (function() {
       var summaryContainer = document.getElementById("summary");
@@ -75,7 +79,8 @@
       }
 
       runSuite(window.normalCdfTests || [], "results-cdf", "header-cdf", "Normal CDF");
-      runSuite(window.blackScholesTests || [], "results-bs", "header-bs", "Black-Scholes");
+      runSuite(window.callValuationTests || [], "results-call", "header-call", "Call valuation");
+      runSuite(window.impliedVolatilityTests || [], "results-iv", "header-iv", "Implied volatility");
 
       if (failed === 0) {
         summaryContainer.className = "summary success";
