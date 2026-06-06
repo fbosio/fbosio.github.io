@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Unit Tests</title>
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <h1>Unit Tests</h1>
+  <div id="summary" class="summary">Running tests...</div>
+  
+  <h2 id="header-cdf">Normal CDF</h2>
+  <div id="results-cdf"></div>
+  
+  <h2 id="header-bs">Black-Scholes</h2>
+  <div id="results-bs"></div>
+
+  <script src="../js/normal-cdf.js"></script>
+  <script src="../js/blackscholes.js"></script>
+  <script src="test-utils.js"></script>
+  <script src="normal-cdf.test.js"></script>
+  <script src="blackscholes.test.js"></script>
+  <script>
+    (function() {
+      var summaryContainer = document.getElementById("summary");
+      var passed = 0;
+      var failed = 0;
+      var failedSections = [];
+
+      function runSuite(tests, containerId, headerId, sectionName) {
+        var container = document.getElementById(containerId);
+        var sectionFailed = false;
+        for (var i = 0; i < tests.length; i++) {
+          var t = tests[i];
+          var div = document.createElement("div");
+          div.className = "test-case";
+          
+          var headerDiv = document.createElement("div");
+          headerDiv.className = "test-header";
+          
+          var nameSpan = document.createElement("span");
+          nameSpan.className = "test-name";
+          nameSpan.textContent = t.name;
+          headerDiv.appendChild(nameSpan);
+
+          var statusSpan = document.createElement("span");
+          statusSpan.className = "status";
+          
+          try {
+            t.fn();
+            passed++;
+            div.className += " pass";
+            statusSpan.textContent = "PASS";
+            statusSpan.className += " pass";
+          } catch (err) {
+            failed++;
+            sectionFailed = true;
+            div.className += " fail";
+            statusSpan.textContent = "FAIL";
+            statusSpan.className += " fail";
+            
+            var errDiv = document.createElement("div");
+            errDiv.className = "error-msg";
+            errDiv.textContent = err.message || err;
+            div.appendChild(errDiv);
+          }
+          
+          headerDiv.appendChild(statusSpan);
+          div.insertBefore(headerDiv, div.firstChild);
+          container.appendChild(div);
+        }
+        if (sectionFailed) {
+          failedSections.push({ name: sectionName, id: headerId });
+        }
+      }
+
+      runSuite(window.normalCdfTests || [], "results-cdf", "header-cdf", "Normal CDF");
+      runSuite(window.blackScholesTests || [], "results-bs", "header-bs", "Black-Scholes");
+
+      if (failed === 0) {
+        summaryContainer.className = "summary success";
+        summaryContainer.textContent = "All " + passed + " tests passed successfully!";
+      } else {
+        summaryContainer.className = "summary error";
+        summaryContainer.innerHTML = failed + " out of " + (passed + failed) + " tests failed in: ";
+        for (var i = 0; i < failedSections.length; i++) {
+          var link = document.createElement("a");
+          link.href = "#" + failedSections[i].id;
+          link.textContent = failedSections[i].name;
+          link.style.color = "inherit";
+          summaryContainer.appendChild(link);
+          if (i < failedSections.length - 1) {
+            summaryContainer.appendChild(document.createTextNode(", "));
+          }
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

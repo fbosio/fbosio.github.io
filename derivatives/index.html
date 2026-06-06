@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black-Scholes-Merton European Call Calculator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script type="module" src="js/ui.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Black-Scholes-Merton Derivatives Calculator</h1>
+    </header>
+    <main class="calculator-container">
+        <!-- Card 1: Call present value (Main Output) -->
+        <section class="card card-output" aria-labelledby="card-output-title">
+            <h2 id="card-output-title">Call value</h2>
+            <div class="price-display">
+                <span id="call-price-output" class="price-value">-</span>
+            </div>
+            <p class="subtitle">Theoretical value under the Black-Scholes-Merton model.</p>
+        </section>
+
+        <!-- Card 2: Inputs -->
+        <section class="card card-inputs" aria-labelledby="card-inputs-title">
+            <h2 id="card-inputs-title">Inputs</h2>
+            <form id="calculator-form" novalidate>
+                <div class="form-group">
+                    <label for="input-spot">Spot price (<i>S</i><sub>0</sub>)</label>
+                    <input type="number" id="input-spot" name="spot" step="0.01" min="0.01" placeholder="e.g. 100" value="100" required>
+                    <span class="error-message" id="error-spot" aria-live="polite"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-strike">Strike price (<i>K</i>)</label>
+                    <input type="number" id="input-strike" name="strike" step="0.01" min="0.01" placeholder="e.g. 100" value="100" required>
+                    <span class="error-message" id="error-strike" aria-live="polite"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-rate">Risk-free rate (<i>r</i>, continuous compounding)</label>
+                    <input type="number" id="input-rate" name="rate" step="0.0001" placeholder="e.g. 0.05" value="0.05" required>
+                    <span class="error-message" id="error-rate" aria-live="polite"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-time">Time to maturity (<i>T</i>, years)</label>
+                    <input type="number" id="input-time" name="time" step="0.01" min="0.01" placeholder="e.g. 1.0" value="1.0" required>
+                    <span class="error-message" id="error-time" aria-live="polite"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="input-volatility">Volatility (<i>&sigma;</i>, annual, decimal)</label>
+                    <input type="number" id="input-volatility" name="volatility" step="0.01" min="0.01" placeholder="e.g. 0.2" value="0.2" required>
+                    <span class="error-message" id="error-volatility" aria-live="polite"></span>
+                </div>
+            </form>
+        </section>
+
+        <!-- Card 3: Mathematical details -->
+        <section class="card card-math" aria-labelledby="card-math-title">
+            <h2 id="card-math-title">Mathematical details</h2>
+            <div class="formulas">
+                <div class="formula-block">
+                    <span class="formula-label"><i>d</i><sub>1</sub> formula:</span>
+                    <span class="formula-expr"><i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]</span>
+                </div>
+                <div class="formula-block">
+                    <span class="formula-label"><i>d</i><sub>2</sub> formula:</span>
+                    <span class="formula-expr"><i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i></span>
+                </div>
+                <div class="formula-block">
+                    <span class="formula-label">Call price (<i>c</i>) formula:</span>
+                    <span class="formula-expr"><i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)</span>
+                </div>
+            </div>
+            
+            <div class="intermediate-values">
+                <h3>Intermediate values</h3>
+                <dl class="math-values-list">
+                    <dt><i>d</i><sub>1</sub></dt>
+                    <dd id="output-d1">-</dd>
+                    
+                    <dt><i>d</i><sub>2</sub></dt>
+                    <dd id="output-d2">-</dd>
+                    
+                    <dt>N(<i>d</i><sub>1</sub>)</dt>
+                    <dd id="output-nd1">-</dd>
+                    
+                    <dt>N(<i>d</i><sub>2</sub>)</dt>
+                    <dd id="output-nd2">-</dd>
+                </dl>
+            </div>
+        </section>
+
+        <!-- Card 4: Assumptions / interpretation -->
+        <section class="card card-assumptions" aria-labelledby="card-assumptions-title">
+            <h2 id="card-assumptions-title">Assumptions &amp; Interpretation</h2>
+            <ul>
+                <li>The calculation corresponds to a standard <strong>European call</strong>.</li>
+                <li>The payoff is considered only at the moment of maturity (exercise is not possible before).</li>
+                <li>The risk-free rate is continuously compounded and constant over the option lifetime.</li>
+                <li>The input volatility is annualized and represents the constant standard deviation of log returns.</li>
+                <li>The result is a theoretical model value under Black-Scholes-Merton assumptions, not a market guarantee or price quote.</li>
+            </ul>
+        </section>
+    </main>
+</body>
+</html>
