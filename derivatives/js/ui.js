@@ -1,8 +1,8 @@
 /**
  * UI logic for the Black-Scholes calculator.
  * This module reads inputs, validates them, calls the pure math functions
- * from blackscholes.js, and writes results into the DOM.
- * The math engine (blackscholes.js) never touches the DOM.
+ * from blackscholes.js and solver.js, and writes results into the DOM.
+ * The math engine never touches the DOM.
  */
 document.addEventListener('DOMContentLoaded', function () {
   'use strict';
@@ -17,16 +17,6 @@ document.addEventListener('DOMContentLoaded', function () {
     marketprice: document.getElementById('input-marketprice')
   };
 
-  // ----- Output element references -----
-  var outputs = {
-    price: document.getElementById('call-price-output'),
-    d1: document.getElementById('output-d1'),
-    d2: document.getElementById('output-d2'),
-    Nd1: document.getElementById('output-nd1'),
-    Nd2: document.getElementById('output-nd2'),
-    impliedSigma: document.getElementById('implied-sigma-output')
-  };
-
   // ----- Error message elements -----
   var errors = {
     S0: document.getElementById('error-spot'),
@@ -37,22 +27,97 @@ document.addEventListener('DOMContentLoaded', function () {
     marketprice: document.getElementById('error-marketprice')
   };
 
-  // ----- View toggling nodes -----
-  var callOutputCard = document.getElementById('card-call-output');
-  var impliedOutputCard = document.getElementById('card-implied-output');
+  // ----- Group wrappers -----
   var sigmaGroup = document.getElementById('sigma-group');
   var marketpriceGroup = document.getElementById('marketprice-group');
 
-  // ----- View switch buttons -----
+  // ----- Hide the old Call value / Implied Volatility views (do not remove) -----
+  var callOutputCard = document.getElementById('card-call-output');
+  var impliedOutputCard = document.getElementById('card-implied-output');
   var btnCall = document.getElementById('btn-call');
   var btnImplied = document.getElementById('btn-implied');
 
-  // Current view state
-  var currentView = 'call';   // 'call' or 'implied'
+  if (callOutputCard)   callOutputCard.style.display   = 'none';
+  if (impliedOutputCard) impliedOutputCard.style.display = 'none';
+  if (btnCall)   btnCall.style.display   = 'none';
+  if (btnImplied) btnImplied.style.display = 'none';
+
+  // ----- Build the solve‑view UI (the only view) -----
+
+  // ---- Output card ----
+  var solveOutputCard = document.createElement('div');
+  solveOutputCard.id = 'card-solve-output';
+  solveOutputCard.className = 'card card-output';   // reuses the responsive grid rules
+  solveOutputCard.innerHTML = '<h2 id="solve-title"></h2>' +
+    '<div class="price-display"><span id="solve-result" class="price-value">\u2014</span></div>';
+
+  // insert at the very top of the main container
+  var mainContainer = document.querySelector('.calculator-container');
+  if (mainContainer) {
+    mainContainer.insertBefore(solveOutputCard, mainContainer.firstChild);
+  } else {
+    document.body.appendChild(solveOutputCard);
+  }
+
+  // ---- Radio group (unknown selector) ----
+  var solveSelector = document.createElement('div');
+  solveSelector.id = 'solve-selector';
+  solveSelector.style.display = 'flex';
+  solveSelector.style.flexDirection = 'column';
+  solveSelector.style.gap = '0.35em';
+  solveSelector.style.marginTop = '1em';
+
+  // order: S0, K, r, T, sigma, callPrice – Volatility after Time to maturity
+  var targets = [
+    { value: 'S0',    label: 'Spot (S\u2080)' },
+    { value: 'K',     label: 'Strike (K)' },
+    { value: 'r',     label: 'Risk\u2011free rate (r)' },
+    { value: 'T',     label: 'Time to maturity (T)' },
+    { value: 'sigma', label: 'Volatility (\u03C3)' },
+    { value: 'callPrice', label: 'Call Price (C)' }
+  ];
+
+  var solveTarget = 'callPrice';   // default unknown
+  var lastCallPrice = null;        // most recent call price computed
+
+  var supportedTargets = ['callPrice', 'sigma'];
+
+  for (var i = 0; i < targets.length; i++) {
+    var t = targets[i];
+    var lbl = document.createElement('label');
+    lbl.className = 'radio-label';
+    var rad = document.createElement('input');
+    rad.type = 'radio';
+    rad.name = 'solveUnknown';
+    rad.value = t.value;
+    rad.id = 'solve-' + t.value;
+    rad.disabled = (supportedTargets.indexOf(t.value) === -1);
+    if (t.value === solveTarget) rad.checked = true;
+    lbl.appendChild(rad);
+    lbl.appendChild(document.createTextNode(' ' + t.label));
+    solveSelector.appendChild(lbl);
+  }
+
+  // put the selector inside the output card, below the result number
+  solveOutputCard.appendChild(solveSelector);
+
+  // ----- Radio‑change handler (also triggers solve) -----
+  var solveRadios = solveSelector.querySelectorAll('input[type="radio"]');
+  for (var j = 0; j < solveRadios.length; j++) {
+    solveRadios[j].addEventListener('change', function (e) {
+      solveTarget = e.target.value;
+      // When switching to a variable that is not callPrice, pre‑fill
+      // the market‑price input with the last known callPrice.
+      if (solveTarget !== 'callPrice' && lastCallPrice !== null && !isNaN(lastCallPrice)) {
+        inputs.marketprice.value = lastCallPrice.toFixed(6);
+      }
+      updateSolveUIVisibility();
+      computeSolve();
+    });
+  }
 
   // ----- Helper functions -----
 
-  /** Clear all error messages. */
   function clearErrors() {
     for (var key in errors) {
       if (errors.hasOwnProperty(key) && errors[key]) {
@@ -61,225 +126,190 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /** Show an error message for a specific field. */
   function showError(key, msg) {
     if (errors.hasOwnProperty(key) && errors[key]) {
       errors[key].textContent = msg;
     }
   }
 
-  /** Hide computed outputs (when inputs are invalid). */
-  function clearOutputs() {
-    outputs.price.textContent = '\u2014';
-    outputs.d1.textContent = '\u2014';
-    outputs.d2.textContent = '\u2014';
-    outputs.Nd1.textContent = '\u2014';
-    outputs.Nd2.textContent = '\u2014';
+  /** Toggle input state so the field being solved is greyed out. */
+  function updateSolveUIVisibility() {
+    // enable all inputs first
+    for (var k in inputs) {
+      if (inputs[k]) {
+        inputs[k].disabled = false;
+        if (inputs[k].parentNode) inputs[k].parentNode.style.opacity = '1';
+      }
+    }
+
+    // market‑price group is always visible – never hidden
+    marketpriceGroup.style.display = '';
+    sigmaGroup.style.display = '';
+
+    // disable the input that corresponds to the unknown
+    var unknownInput;
+    if (solveTarget === 'callPrice') {
+      unknownInput = inputs.marketprice;
+    } else {
+      unknownInput = inputs[solveTarget];
+    }
+    if (unknownInput) {
+      unknownInput.disabled = true;
+      if (unknownInput.parentNode) unknownInput.parentNode.style.opacity = '0.5';
+    }
   }
 
-  // ----- Main computation functions -----
-
-  /** Standard call valuation. */
-  function compute() {
+  /** Core solve logic – invoked on input changes and radio changes. */
+  function computeSolve() {
     clearErrors();
 
-    // Read and parse values
+    // ----- set the card title to the current variable name -----
+    var nameMap = {
+      S0: 'Spot (S\u2080)',
+      K: 'Strike (K)',
+      r: 'Risk\u2011free rate (r)',
+      sigma: 'Volatility (\u03C3)',
+      T: 'Time to maturity (T)',
+      callPrice: 'Call Price (C)'
+    };
+    var solvedName = nameMap[solveTarget] || solveTarget;
+    var titleEl = document.getElementById('solve-title');
+    if (titleEl) titleEl.textContent = solvedName;
+
+    // raw values
     var S0 = parseFloat(inputs.S0.value);
     var K = parseFloat(inputs.K.value);
     var r = parseFloat(inputs.r.value);
     var sigma = parseFloat(inputs.sigma.value);
     var T = parseFloat(inputs.T.value);
+    var price = parseFloat(inputs.marketprice.value);
 
-    // Manual validation
+    // manual pre‑validation
     var invalid = false;
 
-    if (isNaN(S0) || S0 <= 0) {
-      showError('S0', 'Spot price S\u2080 must be greater than 0.');
+    if (solveTarget !== 'S0' && (isNaN(S0) || S0 <= 0)) {
+      showError('S0', 'Spot must be > 0.');
       invalid = true;
     }
-    if (isNaN(K) || K <= 0) {
-      showError('K', 'Exercise price must be greater than 0.');
+    if (solveTarget !== 'K' && (isNaN(K) || K <= 0)) {
+      showError('K', 'Strike must be > 0.');
       invalid = true;
     }
-    if (isNaN(r)) {
+    if (solveTarget !== 'r' && isNaN(r)) {
       showError('r', 'Rate must be a number.');
       invalid = true;
     }
-    if (isNaN(sigma) || sigma <= 0) {
-      showError('sigma', 'Volatility \u03C3 must be greater than 0.');
+    if (solveTarget !== 'sigma' && (isNaN(sigma) || sigma <= 0)) {
+      showError('sigma', 'Volatility must be > 0.');
       invalid = true;
     }
-    if (isNaN(T) || T <= 0) {
-      showError('T', 'Time to maturity t must be greater than 0.');
+    if (solveTarget !== 'T' && (isNaN(T) || T <= 0)) {
+      showError('T', 'Time must be > 0.');
       invalid = true;
+    }
+    if (solveTarget !== 'callPrice') {
+      if (isNaN(price) || !isFinite(price) || price < 0) {
+        showError('marketprice', 'Market call price must be \u2265 0.');
+        invalid = true;
+      }
     }
 
+    var msgEl = document.getElementById('solve-result');
     if (invalid) {
-      clearOutputs();
+      msgEl.textContent = '\u2014';
       return;
     }
 
-    // Call the pure Black-Scholes function (returns object with property .c)
-    var result = blackScholesCallPrice(S0, K, r, sigma, T);
+    var result;
+    var callObj = null;      // will hold the full price object from black‑scholes
 
-    // Check that the computation succeeded
-    if (result === null || result.c === undefined || isNaN(result.c)) {
-      clearOutputs();
-      return;
-    }
-
-    // Update output fields with reasonable precision
-    outputs.price.textContent = result.c.toFixed(4);
-    outputs.d1.textContent = result.d1.toFixed(4);
-    outputs.d2.textContent = result.d2.toFixed(4);
-    outputs.Nd1.textContent = result.Nd1.toFixed(4);
-    outputs.Nd2.textContent = result.Nd2.toFixed(4);
-  }
-
-  /** Implied volatility computation. */
-  function computeImplied() {
-    clearErrors();
-
-    var S0 = parseFloat(inputs.S0.value);
-    var K = parseFloat(inputs.K.value);
-    var r = parseFloat(inputs.r.value);
-    var T = parseFloat(inputs.T.value);
-    var marketPrice = parseFloat(inputs.marketprice.value);
-
-    var invalid = false;
-
-    if (isNaN(S0) || S0 <= 0) {
-      showError('S0', 'Spot price S\u2080 must be greater than 0.');
-      invalid = true;
-    }
-    if (isNaN(K) || K <= 0) {
-      showError('K', 'Exercise price must be greater than 0.');
-      invalid = true;
-    }
-    if (isNaN(r)) {
-      showError('r', 'Rate must be a number.');
-      invalid = true;
-    }
-    if (isNaN(T) || T <= 0) {
-      showError('T', 'Time to maturity t must be greater than 0.');
-      invalid = true;
-    }
-    if (isNaN(marketPrice) || !isFinite(marketPrice) || marketPrice < 0) {
-      if (inputs.marketprice.value.trim() === '') {
-        showError('marketprice', 'Market call price is required.');
+    try {
+      if (solveTarget === 'callPrice') {
+        if (typeof blackScholesCallPrice !== 'function') {
+          result = { converged: false, reason: 'Pricing function unavailable.' };
+        } else {
+          callObj = blackScholesCallPrice(S0, K, r, sigma, T);
+          if (!callObj || isNaN(callObj.c)) {
+            result = { converged: false, reason: 'Invalid inputs for option pricing.' };
+          } else {
+            result = { converged: true, value: callObj.c, c: callObj.c };
+          }
+        }
+      } else if (solveTarget === 'sigma') {
+        if (typeof impliedVolatilityCall !== 'function') {
+          result = { converged: false, reason: 'Implied volatility function unavailable.' };
+        } else {
+          var iv = impliedVolatilityCall({
+            S0: S0, K: K, r: r, T: T,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000
+          });
+          if (!iv || iv.sigma === null || iv.sigma === undefined) {
+            result = { converged: false, reason: iv && iv.reason ? iv.reason : 'Implied volatility did not converge.' };
+          } else {
+            // obtain the call price that corresponds to the solved sigma
+            callObj = blackScholesCallPrice(S0, K, r, iv.sigma, T);
+            result = { converged: true, value: iv.sigma, c: callObj ? callObj.c : NaN };
+            if (isNaN(result.c)) {
+              result.converged = false;
+              result.reason = 'Could not compute call price with solved sigma.';
+            }
+          }
+        }
       } else {
-        showError('marketprice', 'Market call price must be a non\u2010negative number.');
+        result = { converged: false, reason: 'Solving for ' + solveTarget + ' is not implemented.' };
       }
-      invalid = true;
+    } catch (e) {
+      result = { converged: false, reason: e.message };
     }
 
-    if (invalid) {
-      outputs.impliedSigma.textContent = '\u2014';
+    // ----- show only em‑dash for errors (error details are only for debugging) -----
+    if (!result.converged) {
+      msgEl.textContent = '\u2014';
       return;
     }
 
-    var result = impliedVolatilityCall({
-      S0: S0,
-      K: K,
-      r: r,
-      T: T,
-      marketPrice: marketPrice
-    });
+    // store the latest call price
+    if (typeof result.c === 'number' && !isNaN(result.c)) {
+      lastCallPrice = result.c;
+    }
 
-    if (result.sigma !== null && result.converged) {
-      outputs.impliedSigma.textContent = result.sigma.toFixed(4);
+    // display the solved value (the card title already shows the variable name)
+    msgEl.textContent = result.value.toFixed(6);
+
+    // ----- update intermediate values in the mathematical details card -----
+    var d1El = document.getElementById('output-d1');
+    var d2El = document.getElementById('output-d2');
+    var nd1El = document.getElementById('output-nd1');
+    var nd2El = document.getElementById('output-nd2');
+
+    function setDash(el) { if (el) el.textContent = '\u2014'; }
+    function safeNum(v, el) {
+      if (el) el.textContent = (typeof v === 'number' && !isNaN(v)) ? v.toFixed(6) : '\u2014';
+    }
+
+    if (callObj && typeof callObj.d1 !== 'undefined') {
+      safeNum(callObj.d1, d1El);
+      safeNum(callObj.d2, d2El);
+      safeNum(callObj.Nd1, nd1El);
+      safeNum(callObj.Nd2, nd2El);
     } else {
-      outputs.impliedSigma.textContent = 'N/A';
-      if (result.reason) {
-        showError('marketprice', 'Computation failed: ' + result.reason);
-      }
+      setDash(d1El);
+      setDash(d2El);
+      setDash(nd1El);
+      setDash(nd2El);
     }
   }
 
-  /** Route recalculation to the active view. */
-  function recalculate() {
-    if (currentView === 'implied') {
-      computeImplied();
-    } else {
-      compute();
+  // ----- Attach input listeners (live recalculation) -----
+  for (var key in inputs) {
+    if (inputs.hasOwnProperty(key) && inputs[key]) {
+      inputs[key].addEventListener('input', function () {
+        computeSolve();
+      });
     }
   }
-
-  // ===== View switch helpers =====
-
-  /** Update the active state of the switch buttons. */
-  function setActiveButton(view) {
-    if (view === 'implied') {
-      btnCall.setAttribute('aria-selected', 'false');
-      btnImplied.setAttribute('aria-selected', 'true');
-      btnCall.classList.remove('active');
-      btnImplied.classList.add('active');
-    } else {
-      btnCall.setAttribute('aria-selected', 'true');
-      btnImplied.setAttribute('aria-selected', 'false');
-      btnCall.classList.add('active');
-      btnImplied.classList.remove('active');
-    }
-  }
-
-  /** Apply the given view (call or implied). */
-  function applyView(view) {
-    currentView = view;
-    clearErrors();
-    setActiveButton(view);
-
-    // When switching to implied, seed the market price with the current call value.
-    if (view === 'implied') {
-      var S0 = parseFloat(inputs.S0.value);
-      var K  = parseFloat(inputs.K.value);
-      var r  = parseFloat(inputs.r.value);
-      var sigma = parseFloat(inputs.sigma.value);
-      var T  = parseFloat(inputs.T.value);
-      if (!isNaN(S0) && S0 > 0 && !isNaN(K) && K > 0 && !isNaN(r) && !isNaN(sigma) && sigma > 0 && !isNaN(T) && T > 0) {
-        var call = blackScholesCallPrice(S0, K, r, sigma, T);
-        if (call && !isNaN(call.c)) {
-          inputs.marketprice.value = call.c.toFixed(6);
-        }
-      }
-      callOutputCard.style.display = 'none';
-      impliedOutputCard.style.display = '';
-      sigmaGroup.style.display = 'none';
-      marketpriceGroup.style.display = '';
-    } else {
-      // When switching back to call, seed sigma with the last implied volatility.
-      var impliedText = outputs.impliedSigma.textContent;
-      if (impliedText !== '\u2014' && impliedText !== 'N/A') {
-        var impliedVal = parseFloat(impliedText);
-        if (!isNaN(impliedVal)) {
-          inputs.sigma.value = impliedVal.toFixed(6);
-        }
-      }
-      callOutputCard.style.display = '';
-      impliedOutputCard.style.display = 'none';
-      sigmaGroup.style.display = '';
-      marketpriceGroup.style.display = 'none';
-    }
-    recalculate();
-  }
-
-  /** Handle a change to the URL hash. */
-  function handleHashChange() {
-    var hash = location.hash;
-    if (hash === '#implied-volatility') {
-      applyView('implied');
-    } else {
-      applyView('call');
-    }
-  }
-
-  // ----- Button click handlers -----
-  btnCall.addEventListener('click', function () {
-    location.hash = '#call-value';
-  });
-
-  btnImplied.addEventListener('click', function () {
-    location.hash = '#implied-volatility';
-  });
 
   // ----- Set sensible default values (demo) -----
   inputs.S0.value = '100';
@@ -289,29 +319,18 @@ document.addEventListener('DOMContentLoaded', function () {
   inputs.T.value = '1';
 
   // Compute a default market price consistent with the default volatility.
-  var defaultCall = blackScholesCallPrice(100, 100, 0.05, 0.2, 1);
-  if (defaultCall && !isNaN(defaultCall.c)) {
-    inputs.marketprice.value = defaultCall.c.toFixed(6);
-  } else {
-    inputs.marketprice.value = '10.450583'; // fallback
-  }
-
-  // ----- Bind input events for live recalculation -----
-  for (var key in inputs) {
-    if (inputs.hasOwnProperty(key) && inputs[key]) {
-      inputs[key].addEventListener('input', function() {
-        recalculate();
-      });
+  if (typeof blackScholesCallPrice === 'function') {
+    var defaultCall = blackScholesCallPrice(100, 100, 0.05, 0.2, 1);
+    if (defaultCall && !isNaN(defaultCall.c)) {
+      inputs.marketprice.value = defaultCall.c.toFixed(6);
+      lastCallPrice = defaultCall.c;
+    } else {
+      inputs.marketprice.value = '10.450583'; // fallback
+      lastCallPrice = 10.450583;
     }
   }
 
-  // ----- Hash routing -----
-  window.addEventListener('hashchange', handleHashChange);
-
-  // Set initial hash if none present
-  if (!location.hash || location.hash === '#') {
-    location.hash = '#call-value';
-  } else {
-    handleHashChange();
-  }
+  // ----- Initial activation -----
+  updateSolveUIVisibility();
+  computeSolve();
 });

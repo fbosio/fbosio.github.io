@@ -43,10 +43,6 @@
 <body>
     <header>
         <h1>Derivatives Calculator</h1>
-        <nav class="view-switcher" role="tablist">
-            <button role="tab" id="btn-call" class="active" aria-selected="true">Call value</button>
-            <button role="tab" id="btn-implied" aria-selected="false">Implied volatility</button>
-        </nav>
     </header>
     <main class="calculator-container">
         <!-- Card 1: Call present value (Main Output) -->
@@ -95,6 +91,12 @@
                     <span class="error-message" id="error-time" aria-live="polite"></span>
                 </div>
 
+                <!-- View switcher (appears after time-to-maturity input) -->
+                <div class="view-switcher" role="tablist">
+                    <button role="tab" id="btn-call" class="active" aria-selected="true">Call value</button>
+                    <button role="tab" id="btn-implied" aria-selected="false">Implied volatility</button>
+                </div>
+
                 <div class="form-group" id="sigma-group">
                     <label for="input-volatility">Volatility (<i>&sigma;</i>, annual, decimal)</label>
                     <input type="number" id="input-volatility" name="volatility" step="0.01" min="0.01" placeholder="e.g. 0.2" value="0.2" required>
@@ -109,7 +111,7 @@
             </form>
         </section>
 
-        <!-- Card 3: Mathematical details -->
+        <!-- Card 4: Mathematical details (last) -->
         <section class="card card-math" aria-labelledby="card-math-title">
             <h2 id="card-math-title">Mathematical details</h2>
             <div class="formulas">
@@ -143,18 +145,6 @@
                     <dd id="output-nd2">-</dd>
                 </dl>
             </div>
-        </section>
-
-        <!-- Card 4: Assumptions / interpretation -->
-        <section class="card card-assumptions" aria-labelledby="card-assumptions-title">
-            <h2 id="card-assumptions-title">Assumptions &amp; Interpretation</h2>
-            <ul>
-                <li>The calculation corresponds to a standard <strong>European call</strong>.</li>
-                <li>The payoff is considered only at the moment of maturity (exercise is not possible before).</li>
-                <li>The risk-free rate is continuously compounded and constant over the option lifetime.</li>
-                <li>The input volatility is annualized and represents the constant standard deviation of log returns.</li>
-                <li>The result is a theoretical model value under Black-Scholes-Merton assumptions, not a market guarantee or price quote.</li>
-            </ul>
         </section>
     </main>
 </body>

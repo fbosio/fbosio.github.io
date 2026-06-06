@@ -28,6 +28,8 @@ header {
     /* Span columns for better visual balance */
     .card-output {
         grid-column: 1 / 2;
+        grid-row: 1;                /* always at the top of the left column */
+        order: -1;                 /* ensure it appears first */
     }
     .card-inputs {
         grid-column: 2 / 3;
@@ -58,11 +60,11 @@ header {
     font-size: 1.4em;
 }
 
-/* Card 1: Output Display */
+/* Card 1: Output Display (also used for the solve result card) */
 .card-output {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;   /* content starts at the top */
     align-items: center;
     text-align: center;
 }
@@ -107,6 +109,16 @@ header {
     color: #ff4a4a;
     min-height: 1.2em;
     margin-top: 4px;
+}
+
+/* ---------- Radio buttons inside the solve card ---------- */
+#solve-selector .radio-label {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 1em;
+    margin-bottom: 0.5em;
+    font-size: 0.95rem;
+    white-space: nowrap;
 }
 
 /* Card 3: Mathematical Details */
