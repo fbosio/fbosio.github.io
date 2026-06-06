@@ -63,13 +63,13 @@
     assert(!isNaN(result.c), "Price computes normally");
   });
 
-  test("Greeks: price increases with S0", function() {
+  test("Greeks: delta > 0 - price increases with S0", function() {
     var p1 = blackScholesCallPrice(100, 100, 0.05, 0.2, 1).c;
     var p2 = blackScholesCallPrice(105, 100, 0.05, 0.2, 1).c;
     assert(p2 > p1, "Price increases with spot price");
   });
 
-  test("Greeks: price increases with sigma", function() {
+  test("Greeks: vega > 0 - price increases with sigma", function() {
     var p1 = blackScholesCallPrice(100, 100, 0.05, 0.2, 1).c;
     var p2 = blackScholesCallPrice(100, 100, 0.05, 0.3, 1).c;
     assert(p2 > p1, "Price increases with volatility");
