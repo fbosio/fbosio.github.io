@@ -5,37 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Black-Scholes-Merton European Call Calculator</title>
     <link rel="stylesheet" href="css/styles.css">
-    <style>
-        .view-switcher {
-            display: flex;
-            justify-content: center;
-            gap: 0.5em;
-            margin-top: 1em;
-        }
-        .view-switcher button {
-            padding: 0.5em 1em;
-            border: 1px solid var(--button-border-color, #ccc);
-            background: var(--button-bg, #f0f0f0);
-            cursor: pointer;
-            font-size: 1rem;
-            color: var(--button-text-color, #000);
-        }
-        .view-switcher button.active {
-            background: var(--button-active-bg, #007bff);
-            color: var(--button-active-text-color, #fff);
-            border-color: var(--button-active-bg, #007bff);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --button-border-color: #555;
-                --button-bg: #333;
-                --button-text-color: #eee;
-                --button-active-bg: #1a73e8;
-                --button-active-text-color: #fff;
-            }
-        }
-    </style>
+    <!-- No <style> tags here - use CSS files the way you're supposed to! -->
     <script src="js/normal-cdf.js" defer></script>
     <script src="js/blackscholes.js" defer></script>
     <script src="js/ui.js" defer></script>
