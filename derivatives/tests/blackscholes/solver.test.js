@@ -109,4 +109,142 @@
   });
 
   window.impliedVolatilityTests = tests;
+
+  // ============================================================
+  //  Implied time (variable = T)
+  // ============================================================
+  var timeTests = [];
+  function testTime(name, fn) {
+    timeTests.push({ name: name, fn: fn });
+  }
+
+  testTime('round‑trip ATM moderate T', function () {
+    var S0 = 100, K = 100, r = 0.05, sigma = 0.2, trueT = 1.0;
+    var call = blackScholesCallPrice(S0, K, r, sigma, trueT);
+    var res = solveForVariable({
+      variable: 'T',
+      S0: S0,
+      K: K,
+      r: r,
+      sigma: sigma,
+      marketPrice: call.c
+    });
+    assert(res.converged === true, 'ATM T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  testTime('round‑trip deep ITM', function () {
+    var S0 = 120, K = 80, r = 0.02, sigma = 0.3, trueT = 0.5;
+    var call = blackScholesCallPrice(S0, K, r, sigma, trueT);
+    var res = solveForVariable({
+      variable: 'T',
+      S0: S0,
+      K: K,
+      r: r,
+      sigma: sigma,
+      marketPrice: call.c
+    });
+    assert(res.converged === true, 'deep ITM T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  testTime('round‑trip deep OTM', function () {
+    var S0 = 80, K = 120, r = 0.02, sigma = 0.25, trueT = 0.5;
+    var call = blackScholesCallPrice(S0, K, r, sigma, trueT);
+    var res = solveForVariable({
+      variable: 'T',
+      S0: S0,
+      K: K,
+      r: r,
+      sigma: sigma,
+      marketPrice: call.c
+    });
+    assert(res.converged === true, 'deep OTM T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  testTime('very small maturity', function () {
+    var S0 = 100, K = 95, r = 0.05, sigma = 0.2, trueT = 0.001;
+    var call = blackScholesCallPrice(S0, K, r, sigma, trueT);
+    var res = solveForVariable({
+      variable: 'T',
+      S0: S0,
+      K: K,
+      r: r,
+      sigma: sigma,
+      marketPrice: call.c
+    });
+    assert(res.converged === true, 'very small T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  testTime('negative marketPrice', function () {
+    var res = solveForVariable({
+      variable: 'T',
+      S0: 100,
+      K: 100,
+      r: 0.05,
+      sigma: 0.2,
+      marketPrice: -5
+    });
+    assert(res.converged === false && res.reason === 'Market price must be ≥ 0.',
+           'negative marketPrice should be invalid');
+  });
+
+  testTime('missing marketPrice', function () {
+    var res = solveForVariable({
+      variable: 'T',
+      S0: 100,
+      K: 100,
+      r: 0.05,
+      sigma: 0.2
+    });
+    assert(res.converged === false && res.reason === 'Market price must be ≥ 0.',
+           'missing marketPrice should be invalid');
+  });
+
+  testTime('non‑finite marketPrice (NaN)', function () {
+    var res = solveForVariable({
+      variable: 'T',
+      S0: 100,
+      K: 100,
+      r: 0.05,
+      sigma: 0.2,
+      marketPrice: NaN
+    });
+    assert(res.converged === false && res.reason === 'Market price must be ≥ 0.',
+           'NaN marketPrice should be invalid');
+  });
+
+  testTime('marketPrice too high -> no bracket', function () {
+    var res = solveForVariable({
+      variable: 'T',
+      S0: 100,
+      K: 80,
+      r: 0.05,
+      sigma: 0.2,
+      marketPrice: 110
+    });
+    assert(res.converged === false && res.reason === 'no_bracket',
+           'price above maximum attainable should cause no_bracket');
+  });
+
+  testTime('max iterations with small limit', function () {
+    var S0 = 100, K = 100, r = 0.05, sigma = 0.2, trueT = 1.0;
+    var call = blackScholesCallPrice(S0, K, r, sigma, trueT);
+    var res = solveForVariable({
+      variable: 'T',
+      S0: S0,
+      K: K,
+      r: r,
+      sigma: sigma,
+      marketPrice: call.c,
+      maxIter: 1,
+      tolerance: 1e-12
+    });
+    assert(res.converged === false && res.reason === 'max_iterations',
+           'maxIterations=1 should fail with max_iterations');
+  });
+
+  window.impliedTimeTests = timeTests;
 })();

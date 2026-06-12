@@ -18,6 +18,9 @@
   <h2 id="header-iv">Implied volatility</h2>
   <div id="results-iv"></div>
 
+  <h2 id="header-time">Implied time</h2>
+  <div id="results-time"></div>
+
   <script src="../js/normal-cdf.js"></script>
   <script src="../js/blackscholes/calculator.js"></script>
   <script src="../js/blackscholes/solver.js"></script>
@@ -82,6 +85,7 @@
       runSuite(window.normalCdfTests || [], "results-cdf", "header-cdf", "Normal CDF");
       runSuite(window.callValuationTests || [], "results-call", "header-call", "Call valuation");
       runSuite(window.impliedVolatilityTests || [], "results-iv", "header-iv", "Implied volatility");
+      runSuite(window.impliedTimeTests || [], "results-time", "header-time", "Implied time");
 
       if (failed === 0) {
         summaryContainer.className = "summary success";
