@@ -80,4 +80,8 @@
 
   window.blackScholesTests = tests;
   window.callValuationTests = tests;
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = tests;
+  }
 })();

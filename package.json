@@ -1,0 +1,7 @@
+{
+  "name": "derivatives",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node derivatives/tests/run-tests.cjs"
+  }
+}

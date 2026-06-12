@@ -47,4 +47,8 @@
   });
 
   window.normalCdfTests = tests;
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = tests;
+  }
 })();

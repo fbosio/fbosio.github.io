@@ -76,3 +76,13 @@ function blackScholesCallPrice(S0, K, r, sigma, T) {
     Nd2: Nd2
   };
 }
+
+// Node.js export
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    computeD1: computeD1,
+    computeD2: computeD2,
+    validateInputs: validateInputs,
+    blackScholesCallPrice: blackScholesCallPrice
+  };
+}

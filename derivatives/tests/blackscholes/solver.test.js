@@ -386,10 +386,21 @@
     assert(!res.converged, 'Should fail for negative price');
   });
 
-  // ---- Update the exports ----
+  // ---- Update the exports (window) ----
   window.impliedVolatilityTests = tests;
   window.impliedTimeTests = timeTests;
   window.impliedSpotTests = spotTests;
   window.impliedStrikeTests = strikeTests;
   window.impliedRateTests = rateTests;
+
+  // ---- Node.js export ----
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      impliedVolatilityTests: tests,
+      impliedTimeTests: timeTests,
+      impliedSpotTests: spotTests,
+      impliedStrikeTests: strikeTests,
+      impliedRateTests: rateTests
+    };
+  }
 })();

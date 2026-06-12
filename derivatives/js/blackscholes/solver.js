@@ -228,3 +228,8 @@ if (typeof window !== 'undefined') {
   window.solveForVariable = solveForVariable;
   window.impliedVolatilityCall = impliedVolatilityCall;
 }
+
+// Node.js export
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { solveForVariable, impliedVolatilityCall };
+}

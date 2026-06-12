@@ -36,3 +36,8 @@ function erf(x) {
 function normalCdf(x) {
   return 0.5 * (1 + erf(x / Math.SQRT2));
 }
+
+// Node.js export
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { erf: erf, normalCdf: normalCdf };
+}
