@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var lastCallPrice = null;        // most recent call price computed
   var lastSigma = null;           // most recent volatility computed
 
-  var supportedTargets = ['callPrice', 'sigma', 'T'];
+  var supportedTargets = ['callPrice', 'sigma', 'T', 'r', 'K', 'S0'];
 
   for (var i = 0; i < targets.length; i++) {
     var t = targets[i];
@@ -285,6 +285,72 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }
         }
+      } else if (solveTarget === 'S0') {
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
+        } else {
+          var st = solveForVariable({
+            variable: 'S0',
+            K: K, r: r, sigma: sigma, T: T,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000
+          });
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for S0 did not converge.' };
+          } else {
+            callObj = blackScholesCallPrice(st.value, K, r, sigma, T);
+            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
+            if (isNaN(result.c)) {
+              result.converged = false;
+              result.reason = 'Could not compute call price with solved S0.';
+            }
+          }
+        }
+      } else if (solveTarget === 'K') {
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
+        } else {
+          var st = solveForVariable({
+            variable: 'K',
+            S0: S0, r: r, sigma: sigma, T: T,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000
+          });
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for K did not converge.' };
+          } else {
+            callObj = blackScholesCallPrice(S0, st.value, r, sigma, T);
+            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
+            if (isNaN(result.c)) {
+              result.converged = false;
+              result.reason = 'Could not compute call price with solved K.';
+            }
+          }
+        }
+      } else if (solveTarget === 'r') {
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
+        } else {
+          var st = solveForVariable({
+            variable: 'r',
+            S0: S0, K: K, sigma: sigma, T: T,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000
+          });
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for r did not converge.' };
+          } else {
+            callObj = blackScholesCallPrice(S0, K, st.value, sigma, T);
+            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
+            if (isNaN(result.c)) {
+              result.converged = false;
+              result.reason = 'Could not compute call price with solved r.';
+            }
+          }
+        }
       } else {
         result = { converged: false, reason: 'Solving for ' + solveTarget + ' is not implemented.' };
       }
@@ -316,6 +382,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (solveTarget === 'T' && typeof result.value === 'number' && !isNaN(result.value)) {
       inputs.T.value = result.value.toFixed(6);
+    }
+    if (solveTarget === 'S0' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.S0.value = result.value.toFixed(6);
+    }
+    if (solveTarget === 'K' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.K.value = result.value.toFixed(6);
+    }
+    if (solveTarget === 'r' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.r.value = result.value.toFixed(6);
     }
 
     // display the solved value (the card title already shows the variable name)
