@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var lastCallPrice = null;        // most recent call price computed
   var lastSigma = null;           // most recent volatility computed
 
-  var supportedTargets = ['callPrice', 'sigma'];
+  var supportedTargets = ['callPrice', 'sigma', 'T'];
 
   for (var i = 0; i < targets.length; i++) {
     var t = targets[i];
@@ -263,6 +263,28 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           }
         }
+      } else if (solveTarget === 'T') {
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
+        } else {
+          var st = solveForVariable({
+            variable: 'T',
+            S0: S0, K: K, r: r, sigma: sigma,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000
+          });
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for T did not converge.' };
+          } else {
+            callObj = blackScholesCallPrice(S0, K, r, sigma, st.value);
+            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
+            if (isNaN(result.c)) {
+              result.converged = false;
+              result.reason = 'Could not compute call price with solved T.';
+            }
+          }
+        }
       } else {
         result = { converged: false, reason: 'Solving for ' + solveTarget + ' is not implemented.' };
       }
@@ -291,6 +313,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
       inputs.sigma.value = result.value.toFixed(6);
+    }
+    if (solveTarget === 'T' && typeof result.value === 'number' && !isNaN(result.value)) {
+      inputs.T.value = result.value.toFixed(6);
     }
 
     // display the solved value (the card title already shows the variable name)
