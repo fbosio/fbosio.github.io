@@ -123,6 +123,24 @@
     assertAlmostEqual(result.r_adj, 0.03, 1e-10);
   });
 
+  test("Currency with q fallback: S_adj = S0 * exp(-q * T)", function () {
+    var S0 = 1.25;
+    var q = 0.01;   // same numerical effect as rf
+    var T = 0.5;
+    var expected = S0 * Math.exp(-q * T);
+
+    var result = computeAdjustedInputs({
+      type: "currency",
+      S0: S0,
+      T: T,
+      r: 0.03,
+      q: q   // no rf provided
+    });
+
+    assertAlmostEqual(result.S_adj, expected, 1e-10);
+    assertAlmostEqual(result.r_adj, 0.03, 1e-10);
+  });
+
   // ---- Futures ----
   test("Futures: pass through observed futures price", function () {
     var F0 = 50;

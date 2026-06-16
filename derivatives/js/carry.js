@@ -35,9 +35,10 @@ function computeAdjustedInputs(params) {
       }
     }
     S_adj = S0 - pv;
-  } else if (type === 'currency' && rf !== 0) {
-    // Continuous foreign rate adjustment.
-    S_adj = S0 * Math.exp(-rf * T);
+  } else if (type === 'currency') {
+    // Use rf if available, otherwise fall back to continuous yield q.
+    var carry = (typeof params.rf !== 'undefined' && params.rf !== null) ? params.rf : q;
+    S_adj = S0 * Math.exp(-carry * T);
   } else if ((type === 'equity' || type === 'index') && q !== 0) {
     // Continuous dividend yield adjustment.
     S_adj = S0 * Math.exp(-q * T);
