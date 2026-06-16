@@ -58,6 +58,12 @@ if (typeof solverMod === 'function') {
   global.impliedVolatilityCall = global.impliedVolatilityCall || solverMod.impliedVolatilityCall;
 }
 
+// ---------- Load the adjuster module ----------
+var adjusterMod = require('../js/carry');
+if (typeof adjusterMod === 'object') {
+  global.computeAdjustedInputs = global.computeAdjustedInputs || adjusterMod.computeAdjustedInputs;
+}
+
 // ---------- Accumulate overall failures ----------
 var totalFailed = 0;
 
@@ -86,6 +92,7 @@ function runSuite(title, testArray) {
 var normalCdfTests = require('./normal-cdf.test');
 var callValTests = require('./blackscholes/calculator.test');
 var solverTests = require('./blackscholes/solver.test');
+var adjusterTests = require('./carry.test');
 
 // ---------- Execute every suite ----------
 runSuite('Normal CDF', normalCdfTests);
@@ -95,6 +102,7 @@ runSuite('Implied Time', solverTests.impliedTimeTests);
 runSuite('Implied Spot', solverTests.impliedSpotTests);
 runSuite('Implied Strike', solverTests.impliedStrikeTests);
 runSuite('Implied Rate', solverTests.impliedRateTests);
+runSuite('Underlying Adjustment', adjusterTests);
 
 // ---------- Set exit code for CI / aider ----------
 process.exitCode = totalFailed > 0 ? 1 : 0;

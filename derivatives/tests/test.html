@@ -30,13 +30,18 @@
   <h2 id="header-rate">Implied rate</h2>
   <div id="results-rate"></div>
 
+  <h2 id="header-adjuster">Underlying Adjustment</h2>
+  <div id="results-adjuster"></div>
+
   <script src="../js/normal-cdf.js"></script>
   <script src="../js/blackscholes/calculator.js"></script>
   <script src="../js/blackscholes/solver.js"></script>
+  <script src="../js/carry.js"></script>
   <script src="test-utils.js"></script>
   <script src="normal-cdf.test.js"></script>
   <script src="blackscholes/calculator.test.js"></script>
   <script src="blackscholes/solver.test.js"></script>
+  <script src="carry.test.js"></script>
   <script>
     (function() {
       var summaryContainer = document.getElementById("summary");
@@ -98,6 +103,7 @@
       runSuite(window.impliedSpotTests || [], "results-spot", "header-spot", "Implied spot");
       runSuite(window.impliedStrikeTests || [], "results-strike", "header-strike", "Implied strike");
       runSuite(window.impliedRateTests || [], "results-rate", "header-rate", "Implied rate");
+      runSuite(window.carryTests || [], "results-adjuster", "header-adjuster", "Underlying Adjustment");
 
       if (failed === 0) {
         summaryContainer.className = "summary success";
