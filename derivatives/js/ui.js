@@ -31,17 +31,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var sigmaGroup = document.getElementById('sigma-group');
   var marketpriceGroup = document.getElementById('marketprice-group');
 
-  // ----- Hide the old Call value / Implied Volatility views (do not remove) -----
-  var callOutputCard = document.getElementById('card-call-output');
-  var impliedOutputCard = document.getElementById('card-implied-output');
-  var btnCall = document.getElementById('btn-call');
-  var btnImplied = document.getElementById('btn-implied');
-
-  if (callOutputCard)   callOutputCard.style.display   = 'none';
-  if (impliedOutputCard) impliedOutputCard.style.display = 'none';
-  if (btnCall)   btnCall.style.display   = 'none';
-  if (btnImplied) btnImplied.style.display = 'none';
-
   // ----- Build the solve‑view UI (the only view) -----
 
   // ---- Output card ----

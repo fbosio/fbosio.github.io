@@ -16,23 +16,6 @@
         <h1>Derivatives Calculator</h1>
     </header>
     <main class="calculator-container">
-        <!-- Card 1: Call present value (Main Output) -->
-        <section class="card card-output" id="card-call-output" aria-labelledby="card-call-title">
-            <h2 id="card-call-title">Call value</h2>
-            <div class="price-display">
-                <span id="call-price-output" class="price-value">-</span>
-            </div>
-            <p class="subtitle">Theoretical value under the Black-Scholes-Merton model.</p>
-        </section>
-
-        <!-- Card 1b: Implied volatility output (hidden by default) -->
-        <section class="card card-output" id="card-implied-output" aria-labelledby="card-implied-title" style="display:none;">
-            <h2 id="card-implied-title">Implied Volatility</h2>
-            <div class="price-display">
-                <span id="implied-sigma-output" class="price-value">-</span>
-            </div>
-            <p class="subtitle">Implied volatility (<i>&sigma;</i>) under the Black‑Scholes‑Merton model.</p>
-        </section>
 
         <!-- Card 2: Inputs -->
         <section class="card card-inputs" aria-labelledby="card-inputs-title">
@@ -60,12 +43,6 @@
                     <label for="input-time">Time to maturity (<i>T</i>, years)</label>
                     <input type="number" id="input-time" name="time" step="0.01" min="0.01" placeholder="e.g. 1.0" value="1.0" required>
                     <span class="error-message" id="error-time" aria-live="polite"></span>
-                </div>
-
-                <!-- View switcher (appears after time-to-maturity input) -->
-                <div class="view-switcher" role="tablist">
-                    <button role="tab" id="btn-call" class="active" aria-selected="true">Call value</button>
-                    <button role="tab" id="btn-implied" aria-selected="false">Implied volatility</button>
                 </div>
 
                 <div class="form-group" id="sigma-group">
