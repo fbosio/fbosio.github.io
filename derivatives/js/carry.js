@@ -21,36 +21,55 @@ function computeAdjustedInputs(params) {
   var q = (typeof params.q !== 'undefined' && params.q !== null) ? params.q : 0;
   var rf = (typeof params.rf !== 'undefined' && params.rf !== null) ? params.rf : 0;
   var dividends = params.dividends || [];
-  var S_adj;
+  var adjS0;
 
   if (type === 'futures') {
     // Futures price already reflects cost‑of‑carry; use as‑is.
-    S_adj = S0;
+    adjS0 = S0;
   } else if (dividends.length > 0) {
     // Subtract present value of discrete cash flows before expiry.
     var pv = 0;
     for (var i = 0; i < dividends.length; i++) {
-      if (dividends[i].time < T) {
-        pv += dividends[i].amount * Math.exp(-r * dividends[i].time);
+      var div = dividends[i];
+      // Reject clearly invalid dividend parameters.
+      if (div.time < 0 || div.amount < 0) {
+        // Invalid input → make the solver fail cleanly by returning NaN.
+        return { S_adj: NaN, r_adj: r };
+      }
+      if (div.time < T) {
+        pv += div.amount * Math.exp(-r * div.time);
       }
     }
-    S_adj = S0 - pv;
+    adjS0 = S0 - pv;
   } else if (type === 'currency') {
     // Use rf if available, otherwise fall back to continuous yield q.
     var carry = (typeof params.rf !== 'undefined' && params.rf !== null) ? params.rf : q;
-    S_adj = S0 * Math.exp(-carry * T);
+    adjS0 = S0 * Math.exp(-carry * T);
   } else if ((type === 'equity' || type === 'index') && q !== 0) {
     // Continuous dividend yield adjustment.
-    S_adj = S0 * Math.exp(-q * T);
+    adjS0 = S0 * Math.exp(-q * T);
   } else {
     // No adjustment needed.
-    S_adj = S0;
+    adjS0 = S0;
   }
 
-  return { S_adj: S_adj, r_adj: r };
+  // A zero or negative effective spot means the call is worthless / no‑arbitrage violation.
+  if (adjS0 < 0) {
+    return { S_adj: NaN, r_adj: r };
+  }
+
+  return { S_adj: adjS0, r_adj: r };
 }
 
 // Node export
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { computeAdjustedInputs: computeAdjustedInputs };
+}
+
+// Attach to global scope so that the solver (and other scripts) can find it
+if (typeof window !== 'undefined') {
+  window.computeAdjustedInputs = computeAdjustedInputs;
+}
+if (typeof global !== 'undefined') {
+  global.computeAdjustedInputs = computeAdjustedInputs;
 }

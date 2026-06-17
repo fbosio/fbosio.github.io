@@ -3,19 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Black-Scholes-Merton European Call Calculator</title>
+    <title>Black-Scholes Calculator</title>
     <link rel="stylesheet" href="css/styles.css">
     <!-- No <style> tags here - use CSS files the way you're supposed to! -->
     <script src="js/normal-cdf.js" defer></script>
     <script src="js/blackscholes/calculator.js" defer></script>
+    <script src="js/carry.js" defer></script>
     <script src="js/blackscholes/solver.js" defer></script>
     <script src="js/ui.js" defer></script>
 </head>
 <body>
     <header>
-        <h1>Derivatives Calculator</h1>
+        <h1>Black-Scholes Calculator</h1>
     </header>
     <main class="calculator-container">
+
+        <!-- Underlying Data panel -->
+        <section class="card card-underlying" aria-labelledby="card-underlying-title">
+            <h2 id="card-underlying-title">Underlying Data</h2>
+            <div class="form-group">
+                <label for="input-type">Type</label>
+                <select id="input-type">
+                    <option value="equity">Equity</option>
+                    <option value="currency">Currency</option>
+                    <option value="index">Index</option>
+                    <option value="futures">Futures</option>
+                </select>
+            </div>
+            <div class="form-group" id="rf-group" style="display:none;">
+                <label for="input-rf">Foreign rate (<i>r<sub>f</sub></i>)</label>
+                <input type="number" id="input-rf" step="0.0001" value="0.01" />
+                <span class="error-message" id="error-rf" aria-live="polite"></span>
+            </div>
+            <div class="form-group" id="q-group" style="display:none;">
+                <label for="input-q">Dividend yield (<i>q</i>)</label>
+                <input type="number" id="input-q" step="0.0001" value="0.02" />
+                <span class="error-message" id="error-q" aria-live="polite"></span>
+            </div>
+            <div id="dividends-group" style="display:none;">
+                <table id="dividends-table">
+                    <thead>
+                        <tr>
+                            <th>Time (years)</th>
+                            <th>Amount</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
 
         <!-- Card 2: Inputs -->
         <section class="card card-inputs" aria-labelledby="card-inputs-title">
@@ -65,15 +102,15 @@
             <div class="formulas">
                 <div class="formula-block">
                     <span class="formula-label"><i>d</i><sub>1</sub> formula:</span>
-                    <span class="formula-expr"><i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]</span>
+                    <span id="d1-formula" class="formula-expr"><i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]</span>
                 </div>
                 <div class="formula-block">
                     <span class="formula-label"><i>d</i><sub>2</sub> formula:</span>
-                    <span class="formula-expr"><i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i></span>
+                    <span id="d2-formula" class="formula-expr"><i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i></span>
                 </div>
                 <div class="formula-block">
                     <span class="formula-label">Call value (<i>c</i>) formula:</span>
-                    <span class="formula-expr"><i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)</span>
+                    <span id="call-formula" class="formula-expr"><i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)</span>
                 </div>
             </div>
             
@@ -91,6 +128,9 @@
                     
                     <dt>N(<i>d</i><sub>2</sub>)</dt>
                     <dd id="output-nd2">-</dd>
+
+                    <dt>I (PV of dividends)</dt>
+                    <dd id="output-i">—</dd>
                 </dl>
             </div>
         </section>

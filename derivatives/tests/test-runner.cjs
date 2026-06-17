@@ -102,6 +102,7 @@ runSuite('Implied Time', solverTests.impliedTimeTests);
 runSuite('Implied Spot', solverTests.impliedSpotTests);
 runSuite('Implied Strike', solverTests.impliedStrikeTests);
 runSuite('Implied Rate', solverTests.impliedRateTests);
+runSuite('Implied Dividends', solverTests.impliedDividendTests);
 runSuite('Underlying Adjustment', adjusterTests);
 
 // ---------- Set exit code for CI / aider ----------

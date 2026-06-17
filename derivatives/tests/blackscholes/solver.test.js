@@ -386,12 +386,157 @@
     assert(!res.converged, 'Should fail for negative price');
   });
 
+  // ============================================================
+  //  Discrete dividends (equity)
+  // ============================================================
+  var dividendTests = [];
+
+  function divTest(name, fn) {
+    dividendTests.push({ name: name, fn: fn });
+  }
+
+  function solveWithDiv(variable, params) {
+    return solveForVariable({
+      variable: variable,
+      S0: params.S0,
+      K: params.K,
+      r: params.r,
+      sigma: params.sigma,
+      T: params.T,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 200,
+      tolerance: params.tolerance || 1e-7,
+      carry: {
+        type: 'equity',
+        dividends: params.dividends || [],
+        q: 0,
+        rf: 0
+      }
+    });
+  }
+
+  divTest('IV round‑trip with a single dividend at 0.5y', function () {
+    var S0 = 100, K = 100, r = 0.05, sigmaTrue = 0.2, T = 1;
+    var dividends = [{time: 0.5, amount: 2}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0, T: T, r: r, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, K, adj.r_adj, sigmaTrue, T);
+    var res = solveWithDiv('sigma', {
+      S0: S0, K: K, r: r, T: T, marketPrice: call.c,
+      dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.sigma, sigmaTrue, 1e-3, 'IV recovered');
+  });
+
+  divTest('IV round‑trip with multiple dividends', function () {
+    var S0 = 100, K = 100, r = 0.05, sigmaTrue = 0.2, T = 1;
+    var dividends = [{time: 0.2, amount: 1}, {time: 0.8, amount: 1.5}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0, T: T, r: r, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, K, adj.r_adj, sigmaTrue, T);
+    var res = solveWithDiv('sigma', {
+      S0: S0, K: K, r: r, T: T, marketPrice: call.c,
+      dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.sigma, sigmaTrue, 1e-3, 'IV recovered');
+  });
+
+  divTest('Time round‑trip with dividends', function () {
+    var S0 = 100, K = 100, r = 0.05, sigma = 0.2, trueT = 1;
+    var dividends = [{time: 0.3, amount: 3}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0, T: trueT, r: r, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, K, adj.r_adj, sigma, trueT);
+    var res = solveWithDiv('T', {
+      S0: S0, K: K, r: r, sigma: sigma, marketPrice: call.c,
+      dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  divTest('S0 round‑trip with dividends', function () {
+    var S0True = 100, K = 100, r = 0.05, sigma = 0.2, T = 1;
+    var dividends = [{time: 0.4, amount: 4}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0True, T: T, r: r, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, K, adj.r_adj, sigma, T);
+    var res = solveWithDiv('S0', {
+      S0: undefined, K: K, r: r, sigma: sigma, T: T,
+      marketPrice: call.c, dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.value, S0True, 1e-4, 'S0 recovered');
+  });
+
+  divTest('K round‑trip with dividends', function () {
+    var S0 = 100, KTrue = 90, r = 0.05, sigma = 0.2, T = 1;
+    var dividends = [{time: 0.7, amount: 2}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0, T: T, r: r, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, KTrue, adj.r_adj, sigma, T);
+    var res = solveWithDiv('K', {
+      S0: S0, K: undefined, r: r, sigma: sigma, T: T,
+      marketPrice: call.c, dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.value, KTrue, 1e-4, 'K recovered');
+  });
+
+  divTest('r round‑trip with dividends', function () {
+    var S0 = 100, K = 100, rTrue = 0.05, sigma = 0.2, T = 1;
+    var dividends = [{time: 0.5, amount: 2}];
+    var adj = computeAdjustedInputs({
+      type: 'equity', S0: S0, T: T, r: rTrue, q: 0, rf: 0,
+      dividends: dividends
+    });
+    var call = blackScholesCallPrice(adj.S_adj, K, adj.r_adj, sigma, T);
+    var res = solveWithDiv('r', {
+      S0: S0, K: K, r: undefined, sigma: sigma, T: T,
+      marketPrice: call.c, dividends: dividends
+    });
+    assert(res.converged === true, 'Converged');
+    assertAlmostEqual(res.value, rTrue, 1e-4, 'r recovered');
+  });
+
+  divTest('Clean failure for invalid dividend (time < 0)', function () {
+    var dividends = [{time: -0.1, amount: 2}];
+    var res = solveWithDiv('sigma', {
+      S0: 100, K: 100, r: 0.05, T: 1,
+      marketPrice: 5, dividends: dividends
+    });
+    assert(!res.converged, 'Should fail on invalid dividend');
+  });
+
+  divTest('No‑arbitrage violation with excessive dividends', function () {
+    var S0 = 100, K = 80, r = 0.05, T = 1;
+    var dividends = [{time: 0.1, amount: 110}];  // makes S0‑adj negative
+    var res = solveWithDiv('sigma', {
+      S0: S0, K: K, r: r, T: T,
+      marketPrice: 10, dividends: dividends
+    });
+    assert(!res.converged, 'Should fail because adjusted S0 <= 0');
+  });
+
   // ---- Update the exports (window) ----
   window.impliedVolatilityTests = tests;
   window.impliedTimeTests = timeTests;
   window.impliedSpotTests = spotTests;
   window.impliedStrikeTests = strikeTests;
   window.impliedRateTests = rateTests;
+  window.impliedDividendTests = dividendTests;
 
   // ---- Node.js export ----
   if (typeof module !== 'undefined' && module.exports) {
@@ -400,7 +545,8 @@
       impliedTimeTests: timeTests,
       impliedSpotTests: spotTests,
       impliedStrikeTests: strikeTests,
-      impliedRateTests: rateTests
+      impliedRateTests: rateTests,
+      impliedDividendTests: dividendTests
     };
   }
 })();

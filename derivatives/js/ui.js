@@ -17,6 +17,55 @@ document.addEventListener('DOMContentLoaded', function () {
     marketprice: document.getElementById('input-marketprice')
   };
 
+  // ----- New carry‑related elements -----
+  var typeSelect = document.getElementById('input-type');
+  var rfInput = document.getElementById('input-rf');
+  var qInput = document.getElementById('input-q');
+  var rfGroup = document.getElementById('rf-group');
+  var qGroup = document.getElementById('q-group');
+  var spotLabel = document.querySelector('label[for="input-spot"]');
+
+  // ----- Dividends -----
+  var dividendsGroup = document.getElementById('dividends-group');
+  var dividendsTable = document.getElementById('dividends-table');
+  if (dividendsTable) {
+    // ----- phantom‑row auto‑expand (delegated input event) -----
+    dividendsTable.addEventListener('input', function (e) {
+      var target = e.target;
+      if (!target || !target.closest) return;
+      var row = target.closest('tr');
+      // Promote phantom row if needed
+      if (row && row.classList.contains('phantom-row')) {
+        row.classList.remove('phantom-row');
+        var btn = row.querySelector('.remove-row-btn');
+        if (btn) btn.style.display = '';
+        var tbody = dividendsTable.querySelector('tbody');
+        if (tbody) {
+          var newPhantom = createDividendRow(true);
+          if (newPhantom) tbody.appendChild(newPhantom);
+        }
+      }
+      // Recalculate whenever a dividend input changes
+      computeSolve();
+    });
+
+    // ----- remove‑row button (delegated click) -----
+    dividendsTable.addEventListener('click', function (e) {
+      var btn = e.target.closest('.remove-row-btn');
+      if (!btn) return;
+      var row = btn.closest('tr');
+      if (!row) return;
+      var tbody = dividendsTable.querySelector('tbody');
+      row.remove();
+      // After removal, ensure at least one phantom row exists so the user can still add new rows.
+      if (tbody && !tbody.querySelector('.phantom-row')) {
+        var phantom = createDividendRow(true);
+        if (phantom) tbody.appendChild(phantom);
+      }
+      computeSolve();
+    });
+  }
+
   // ----- Error message elements -----
   var errors = {
     S0: document.getElementById('error-spot'),
@@ -24,7 +73,10 @@ document.addEventListener('DOMContentLoaded', function () {
     r: document.getElementById('error-rate'),
     sigma: document.getElementById('error-volatility'),
     T: document.getElementById('error-time'),
-    marketprice: document.getElementById('error-marketprice')
+    marketprice: document.getElementById('error-marketprice'),
+    // Carry fields
+    rf: document.getElementById('error-rf'),
+    q: document.getElementById('error-q')
   };
 
   // ----- Group wrappers -----
@@ -154,6 +206,102 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // ---- New function: collect discrete dividends ----
+  function collectDividends() {
+    var rows = dividendsTable.querySelectorAll('tbody tr');
+    var dividends = [];
+    for (var i = 0; i < rows.length; i++) {
+      var timeInput = rows[i].querySelector('.div-time');
+      var amountInput = rows[i].querySelector('.div-amount');
+      if (!timeInput || !amountInput) continue;
+      var time = parseFloat(timeInput.value);
+      var amount = parseFloat(amountInput.value);
+      if (isNaN(time) || isNaN(amount)) continue;
+      if (time <= 0 || amount <= 0) continue;
+      dividends.push({ time: time, amount: amount });
+    }
+    return dividends;
+  }
+
+  /** Build a single dividend row. If phantom is true, the row gets
+   *  the 'phantom-row' class and its remove button is hidden via inline style. */
+  function createDividendRow(phantom) {
+    var tr = document.createElement('tr');
+    if (phantom) tr.classList.add('phantom-row');
+
+    // time cell
+    var tdTime = document.createElement('td');
+    var inpTime = document.createElement('input');
+    inpTime.type = 'number';
+    inpTime.step = '0.01';
+    inpTime.min = '0';
+    inpTime.className = 'div-time';
+    inpTime.placeholder = phantom ? 'Start typing…' : 'e.g. 0.5';
+    tdTime.appendChild(inpTime);
+
+    // amount cell
+    var tdAmt = document.createElement('td');
+    var inpAmt = document.createElement('input');
+    inpAmt.type = 'number';
+    inpAmt.step = '0.01';
+    inpAmt.min = '0';
+    inpAmt.className = 'div-amount';
+    inpAmt.placeholder = phantom ? 'Start typing…' : 'e.g. 2';
+    tdAmt.appendChild(inpAmt);
+
+    // remove button cell
+    var tdBtn = document.createElement('td');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'remove-row-btn';
+    btn.textContent = '✕';
+    btn.title = 'Remove row';
+    if (phantom) btn.style.display = 'none';   // hidden for phantom rows
+    tdBtn.appendChild(btn);
+
+    tr.appendChild(tdTime);
+    tr.appendChild(tdAmt);
+    tr.appendChild(tdBtn);
+    return tr;
+  }
+
+  /** Reset the dividends table to one empty real row + one phantom row. */
+  function setupDividendsTable() {
+    var tbody = dividendsTable.querySelector('tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    // one empty real row
+    tbody.appendChild(createDividendRow(false));
+    // one phantom row at the bottom
+    tbody.appendChild(createDividendRow(true));
+  }
+
+  /** Show/hide the carry fields according to the underlying type. */
+  function updateUnderlyingUI() {
+    var type = typeSelect.value;
+    rfGroup.style.display = (type === 'currency') ? '' : 'none';
+    qGroup.style.display  = (type === 'index')    ? '' : 'none';
+
+    // Rename spot label for futures
+    spotLabel.innerHTML = (type === 'futures')
+      ? 'Futures price (<i>F</i><sub>0</sub>)'
+      : 'Spot price (<i>S</i><sub>0</sub>)';
+
+    // dividends group visibility & reset
+    if (type === 'equity') {
+      dividendsGroup.style.display = '';
+      setupDividendsTable();
+    } else {
+      dividendsGroup.style.display = 'none';
+      // clear any stale rows when not equity
+      var tbody = dividendsTable.querySelector('tbody');
+      if (tbody) tbody.innerHTML = '';
+    }
+
+    // update displayed formulas
+    updateFormulaDisplay(type);
+  }
+
   /** Core solve logic – invoked on input changes and radio changes. */
   function computeSolve() {
     clearErrors();
@@ -179,7 +327,25 @@ document.addEventListener('DOMContentLoaded', function () {
     var T = parseFloat(inputs.T.value);
     var price = parseFloat(inputs.marketprice.value);
 
-    // manual pre‑validation
+    // ----- Collect carry parameters -----
+    var underlyingType = typeSelect.value;
+
+    var carryQ = null;
+    var carryRf = null;
+    if (underlyingType === 'index') {
+      carryQ = parseFloat(qInput.value);
+    } else if (underlyingType === 'currency') {
+      carryRf = parseFloat(rfInput.value);
+    }
+
+    var carryParams = {
+      type: underlyingType,
+      dividends: collectDividends()
+    };
+    if (carryQ !== null && !isNaN(carryQ)) carryParams.q = carryQ;
+    if (carryRf !== null && !isNaN(carryRf)) carryParams.rf = carryRf;
+
+    // ----- manual pre‑validation -----
     var invalid = false;
 
     if (solveTarget !== 'S0' && (isNaN(S0) || S0 <= 0)) {
@@ -209,6 +375,16 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
+    // ----- Validate carry fields -----
+    if (underlyingType === 'currency' && (isNaN(carryRf) || carryRf < 0)) {
+      showError('rf', 'Foreign rate must be \u2265 0.');
+      invalid = true;
+    }
+    if (underlyingType === 'index' && (isNaN(carryQ) || carryQ < 0)) {
+      showError('q', 'Dividend yield must be \u2265 0.');
+      invalid = true;
+    }
+
     var msgEl = document.getElementById('solve-result');
     if (invalid) {
       msgEl.textContent = '\u2014';
@@ -223,7 +399,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof blackScholesCallPrice !== 'function') {
           result = { converged: false, reason: 'Pricing function unavailable.' };
         } else {
-          callObj = blackScholesCallPrice(S0, K, r, sigma, T);
+          var adjusted = computeAdjustedInputs({
+            type: underlyingType,
+            S0: S0, T: T, r: r,
+            q: carryQ,
+            rf: carryRf,
+            dividends: collectDividends()
+          });
+          callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
           if (!callObj || isNaN(callObj.c)) {
             result = { converged: false, reason: 'Invalid inputs for option pricing.' };
           } else {
@@ -231,21 +414,28 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         }
       } else if (solveTarget === 'sigma') {
-        if (typeof impliedVolatilityCall !== 'function') {
-          result = { converged: false, reason: 'Implied volatility function unavailable.' };
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
         } else {
-          var iv = impliedVolatilityCall({
-            S0: S0, K: K, r: r, T: T,
+          var st = solveForVariable({
+            variable: 'sigma',
+            S0: S0, K: K, r: r, sigma: undefined, T: T,
             marketPrice: price,
             tolerance: 1e-7,
-            maxIter: 1000
+            maxIter: 1000,
+            carry: carryParams
           });
-          if (!iv || iv.sigma === null || iv.sigma === undefined) {
-            result = { converged: false, reason: iv && iv.reason ? iv.reason : 'Implied volatility did not converge.' };
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for sigma did not converge.' };
           } else {
-            // obtain the call price that corresponds to the solved sigma
-            callObj = blackScholesCallPrice(S0, K, r, iv.sigma, T);
-            result = { converged: true, value: iv.sigma, c: callObj ? callObj.c : NaN };
+            // Use adjusted inputs to compute the call price for display
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType, S0: S0, T: T, r: r,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, st.value, T);
+            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
             if (isNaN(result.c)) {
               result.converged = false;
               result.reason = 'Could not compute call price with solved sigma.';
@@ -261,12 +451,18 @@ document.addEventListener('DOMContentLoaded', function () {
             S0: S0, K: K, r: r, sigma: sigma,
             marketPrice: price,
             tolerance: 1e-7,
-            maxIter: 1000
+            maxIter: 1000,
+            carry: carryParams
           });
           if (!st || !st.converged) {
             result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for T did not converge.' };
           } else {
-            callObj = blackScholesCallPrice(S0, K, r, sigma, st.value);
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType, S0: S0, T: st.value, r: r,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, st.value);
             result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
             if (isNaN(result.c)) {
               result.converged = false;
@@ -283,12 +479,18 @@ document.addEventListener('DOMContentLoaded', function () {
             K: K, r: r, sigma: sigma, T: T,
             marketPrice: price,
             tolerance: 1e-7,
-            maxIter: 1000
+            maxIter: 1000,
+            carry: carryParams
           });
           if (!st || !st.converged) {
             result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for S0 did not converge.' };
           } else {
-            callObj = blackScholesCallPrice(st.value, K, r, sigma, T);
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType, S0: st.value, T: T, r: r,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
             result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
             if (isNaN(result.c)) {
               result.converged = false;
@@ -305,12 +507,18 @@ document.addEventListener('DOMContentLoaded', function () {
             S0: S0, r: r, sigma: sigma, T: T,
             marketPrice: price,
             tolerance: 1e-7,
-            maxIter: 1000
+            maxIter: 1000,
+            carry: carryParams
           });
           if (!st || !st.converged) {
             result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for K did not converge.' };
           } else {
-            callObj = blackScholesCallPrice(S0, st.value, r, sigma, T);
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType, S0: S0, T: T, r: r,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+            callObj = blackScholesCallPrice(adjusted.S_adj, st.value, adjusted.r_adj, sigma, T);
             result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
             if (isNaN(result.c)) {
               result.converged = false;
@@ -327,12 +535,18 @@ document.addEventListener('DOMContentLoaded', function () {
             S0: S0, K: K, sigma: sigma, T: T,
             marketPrice: price,
             tolerance: 1e-7,
-            maxIter: 1000
+            maxIter: 1000,
+            carry: carryParams
           });
           if (!st || !st.converged) {
             result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for r did not converge.' };
           } else {
-            callObj = blackScholesCallPrice(S0, K, st.value, sigma, T);
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType, S0: S0, T: T, r: st.value,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
             result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
             if (isNaN(result.c)) {
               result.converged = false;
@@ -407,6 +621,34 @@ document.addEventListener('DOMContentLoaded', function () {
       setDash(nd1El);
       setDash(nd2El);
     }
+
+    // ----- compute and display present value of known dividends I -----
+    var iEl = document.getElementById('output-i');
+    if (iEl) {
+      var I_val = null;
+      if (underlyingType === 'equity') {
+        var divs = collectDividends();
+        var rUsed = parseFloat(inputs.r.value);
+        var TUsed = parseFloat(inputs.T.value);
+        if (!isNaN(rUsed) && !isNaN(TUsed) && TUsed > 0 && rUsed >= 0) {
+          var I = 0;
+          for (var di = 0; di < divs.length; di++) {
+            var t_i = divs[di].time;
+            var a_i = divs[di].amount;
+            if (t_i > 0 && a_i > 0) {
+              I += a_i * Math.exp(-rUsed * t_i);
+            }
+          }
+          if (I > 0 && isFinite(I)) {
+            I_val = I;
+          }
+        }
+      }
+      iEl.textContent = (I_val !== null && isFinite(I_val)) ? I_val.toFixed(6) : '\u2014';
+    }
+
+    // keep formula display in sync with dividends / underlying type
+    updateFormulaDisplay(typeSelect.value);
   }
 
   // ----- Attach input listeners (live recalculation) -----
@@ -416,6 +658,50 @@ document.addEventListener('DOMContentLoaded', function () {
         computeSolve();
       });
     }
+  }
+
+  // rf and q listeners
+  if (rfInput) rfInput.addEventListener('input', computeSolve);
+  if (qInput)  qInput.addEventListener('input', computeSolve);
+
+  // ----- Attach underlying‑type change handler -----
+  typeSelect.addEventListener('change', function () {
+    updateUnderlyingUI();
+    computeSolve();
+  });
+
+  // ----- Update displayed formulas according to underlying type -----
+  function updateFormulaDisplay(type) {
+    var d1Span = document.getElementById('d1-formula');
+    var d2Span = document.getElementById('d2-formula');
+    var callSpan = document.getElementById('call-formula');
+    if (!d1Span || !d2Span || !callSpan) return;
+
+    var d2Text = '<i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i>';
+    var d1Text, callText;
+
+    // ----- Build formulas -----
+    if (type === 'equity') {
+      d1Text = '<i>d</i><sub>1</sub> = [ ln((<i>S</i><sub>0</sub> - <i>I</i>)/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
+      callText = '<i>c</i> = (<i>S</i><sub>0</sub> - <i>I</i>) N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+    } else if (type === 'currency') {
+      d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> - <i>r</i><sub><i>f</i></sub> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
+      callText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>r</i><sub><i>f</i></sub><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+    } else if (type === 'index') {
+      d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> - <i>q</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
+      callText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>q</i><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+    } else if (type === 'futures') {
+      d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>F</i><sub>0</sub>/<i>K</i>) + (<i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
+      callText = '<i>c</i> = <i>e</i><sup>-<i>r</i><i>T</i></sup> [ <i>F</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> N(<i>d</i><sub>2</sub>) ]';
+    } else {
+      // fallback to equity
+      d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
+      callText = '<i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+    }
+
+    d1Span.innerHTML = d1Text;
+    d2Span.innerHTML = d2Text;
+    callSpan.innerHTML = callText;
   }
 
   // ----- Set sensible default values (demo) -----
@@ -438,6 +724,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ----- Initial activation -----
+  updateUnderlyingUI();
+  collectDividends(); // ensures the default empty array is ready
   updateSolveUIVisibility();
   computeSolve();
 });

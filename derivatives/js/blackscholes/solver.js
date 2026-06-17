@@ -23,6 +23,7 @@
  * @param {number} input.marketPrice - Observed call price.
  * @param {number} [input.maxIter=100] - Maximum bisection iterations.
  * @param {number} [input.tolerance=1e-6] - Convergence tolerance on price error.
+ * @param {Object} [input.carry]    - Optional carry‑adjustment parameters.
  *
  * @returns {object} result with { converged, value?, sigma?, c?, reason?, iterations? }
  */
@@ -36,6 +37,7 @@ function solveForVariable(input) {
   var marketPrice = input.marketPrice;
   var maxIter = input.maxIter || 100;
   var tol = input.tolerance || 1e-6;
+  var carry = input.carry || null;                         // new line
 
   // ----- helpers -----
   function invalid(reason) {
@@ -65,23 +67,32 @@ function solveForVariable(input) {
     return invalid('Market price must be ≥ 0.');
   }
 
-  // ----- price‑error function f(guess) = C(guess) - marketPrice -----
+  // ----- price‑error function f(guess) = C(guess) - marketPrice, with carry adjustment -----
   function priceError(guess) {
-    var call;
-    if (variable === 'S0') {
-      call = blackScholesCallPrice(guess, K, r, sigma, T);
-    } else if (variable === 'K') {
-      call = blackScholesCallPrice(S0, guess, r, sigma, T);
-    } else if (variable === 'r') {
-      call = blackScholesCallPrice(S0, K, guess, sigma, T);
-    } else if (variable === 'sigma') {
-      call = blackScholesCallPrice(S0, K, r, guess, T);
-    } else if (variable === 'T') {
-      call = blackScholesCallPrice(S0, K, r, sigma, guess);
-    } else {
-      return NaN;
+    var variableS0  = S0,  variableK = K,  variableR = r,  variableSigma = sigma,  variableT = T;
+    if (variable === 'S0')    { variableS0  = guess; }
+    else if (variable === 'K'){ variableK   = guess; }
+    else if (variable === 'r'){ variableR   = guess; }
+    else if (variable === 'sigma'){ variableSigma = guess; }
+    else if (variable === 'T'){ variableT   = guess; }
+
+    var adjS = variableS0;
+    var adjR = variableR;
+    var cai = (typeof global !== 'undefined' && global.computeAdjustedInputs)
+      || (typeof window !== 'undefined' && window.computeAdjustedInputs);
+    if (carry && typeof cai === 'function') {
+      var carryInputs = { type: carry.type, S0: variableS0, T: variableT, r: variableR };
+      // q and rf always default to 0 so that the carry module can treat them as numbers
+      carryInputs.q   = (typeof carry.q   !== 'undefined' && carry.q   !== null) ? carry.q   : 0;
+      carryInputs.rf  = (typeof carry.rf  !== 'undefined' && carry.rf  !== null) ? carry.rf  : 0;
+      if (carry.dividends) carryInputs.dividends = carry.dividends;
+      var adjusted = cai(carryInputs);
+      adjS = adjusted.S_adj;
+      adjR = adjusted.r_adj;
     }
-    return call.c - marketPrice;
+
+    var callObj = blackScholesCallPrice(adjS, variableK, adjR, variableSigma, variableT);
+    return callObj.c - marketPrice;
   }
 
   // ----- choose initial bracket -----
@@ -97,6 +108,19 @@ function solveForVariable(input) {
   function f(x) { return priceError(x); }
   var fl = f(low);
   var fh = f(high);
+
+  // For S0, if the initial low guess yields NaN (e.g., negative effective spot caused by dividends),
+  // try to increase low stepwise until we get a finite f(low).
+  if (variable === 'S0' && isNaN(fl)) {
+    for (var adjLoop = 0; adjLoop < 100; adjLoop++) {
+      low = low + 1;
+      if (low > high) break;
+      fl = f(low);
+      if (!isNaN(fl)) break;
+    }
+    if (isNaN(fl)) return invalid('Evaluation error at bracket edges.');
+  }
+
   if (isNaN(fl) || isNaN(fh)) return invalid('Evaluation error at bracket edges.');
 
   for (var expand = 0; expand < 30; expand++) {
