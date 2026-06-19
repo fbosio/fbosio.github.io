@@ -2,6 +2,12 @@
  * Black-Scholes-Merton European call and put pricing.
  * This module provides d1, d2, validation, call and put price.
  * Depends on a global normalCdf() function (from normal-cdf.js).
+ *
+ * Both call and put pricing functions are designed following the
+ * dependency inversion principle. Each function independently computes
+ * d1, d2, the relevant cumulative normal values, and the final price
+ * without calling the other. This keeps them decoupled and makes the
+ * individual pricing logic self‑contained.
  */
 
 function computeD1(S0, K, r, sigma, T) {

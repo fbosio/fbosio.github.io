@@ -70,7 +70,7 @@ var totalFailed = 0;
 
 // ---------- Helper to run a test suite ----------
 function runSuite(title, testArray) {
-  console.log("Hey, let's test " + title + "!");
+  console.log(title + ':');
   var passed = 0;
   var failed = 0;
   for (var i = 0; i < testArray.length; i++) {
