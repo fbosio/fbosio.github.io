@@ -89,7 +89,7 @@
                 </div>
 
                 <div class="form-group" id="marketprice-group" style="display:none;">
-                    <label for="input-marketprice">Market call price (<i>C</i>)</label>
+                    <label for="input-marketprice" id="marketprice-label">Market price</label>
                     <input type="number" id="input-marketprice" name="marketprice" step="0.0001" min="0" placeholder="e.g. 10.45" value="">
                     <span class="error-message" id="error-marketprice" aria-live="polite"></span>
                 </div>
@@ -109,7 +109,7 @@
                     <span id="d2-formula" class="formula-expr"><i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i></span>
                 </div>
                 <div class="formula-block">
-                    <span class="formula-label">Call value (<i>c</i>) formula:</span>
+                    <span class="formula-label" id="price-formula-label">Call value (<i>c</i>) formula:</span>
                     <span id="call-formula" class="formula-expr"><i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)</span>
                 </div>
             </div>

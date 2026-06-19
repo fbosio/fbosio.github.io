@@ -117,7 +117,7 @@ function solveForVariable(input) {
   else if (variable === 'sigma') { low = 1e-4;   high = 4.0; }
   else { return invalid('unknown variable'); }
 
-  // ----- expand bracket until f(low) and f(high) have opposite signs -----
+  // ----- compute f(low) and f(high) -----
   function f(x) { return priceError(x); }
   var fl = f(low);
   var fh = f(high);
@@ -136,6 +136,33 @@ function solveForVariable(input) {
 
   if (isNaN(fl) || isNaN(fh)) return invalid('Evaluation error at bracket edges.');
 
+  // ----- For put time to maturity, the price can be non‑monotonic (hump‑shaped).
+  //      Expand the bracket by scanning from low to high instead of only widening.
+  if (variable === 'T' && optionType === 'put' && fl * fh > 0) {
+    var scanPrev = low;
+    var fPrev = fl;
+    var point = low;
+    for (var s = 0; s < 60; s++) {
+      point = point * 1.5;
+      if (point >= high) break;
+      var fcur = f(point);
+      if (isNaN(fcur)) break;
+      if (fPrev * fcur <= 0) {
+        low = scanPrev;
+        high = point;
+        fl = fPrev;
+        fh = fcur;
+        break;
+      }
+      scanPrev = point;
+      fPrev = fcur;
+    }
+    if (fl * fh > 0) {
+      return invalid('no_bracket');
+    }
+  }
+
+  // ----- expand bracket until f(low) and f(high) have opposite signs -----
   for (var expand = 0; expand < 30; expand++) {
     if (fl * fh <= 0) break;
     if (Math.abs(fl) < Math.abs(fh)) {

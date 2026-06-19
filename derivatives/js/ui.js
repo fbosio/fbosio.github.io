@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
     marketprice: document.getElementById('input-marketprice')
   };
 
-  // ----- New carry‑related elements -----
+  // ----- Carry‑related elements -----
   var typeSelect = document.getElementById('input-type');
   var rfInput = document.getElementById('input-rf');
   var qInput = document.getElementById('input-q');
@@ -29,12 +29,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var dividendsGroup = document.getElementById('dividends-group');
   var dividendsTable = document.getElementById('dividends-table');
   if (dividendsTable) {
-    // ----- phantom‑row auto‑expand (delegated input event) -----
     dividendsTable.addEventListener('input', function (e) {
       var target = e.target;
       if (!target || !target.closest) return;
       var row = target.closest('tr');
-      // Promote phantom row if needed
       if (row && row.classList.contains('phantom-row')) {
         row.classList.remove('phantom-row');
         var btn = row.querySelector('.remove-row-btn');
@@ -45,11 +43,9 @@ document.addEventListener('DOMContentLoaded', function () {
           if (newPhantom) tbody.appendChild(newPhantom);
         }
       }
-      // Recalculate whenever a dividend input changes
       computeSolve();
     });
 
-    // ----- remove‑row button (delegated click) -----
     dividendsTable.addEventListener('click', function (e) {
       var btn = e.target.closest('.remove-row-btn');
       if (!btn) return;
@@ -57,7 +53,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!row) return;
       var tbody = dividendsTable.querySelector('tbody');
       row.remove();
-      // After removal, ensure at least one phantom row exists so the user can still add new rows.
       if (tbody && !tbody.querySelector('.phantom-row')) {
         var phantom = createDividendRow(true);
         if (phantom) tbody.appendChild(phantom);
@@ -74,7 +69,6 @@ document.addEventListener('DOMContentLoaded', function () {
     sigma: document.getElementById('error-volatility'),
     T: document.getElementById('error-time'),
     marketprice: document.getElementById('error-marketprice'),
-    // Carry fields
     rf: document.getElementById('error-rf'),
     q: document.getElementById('error-q')
   };
@@ -83,16 +77,15 @@ document.addEventListener('DOMContentLoaded', function () {
   var sigmaGroup = document.getElementById('sigma-group');
   var marketpriceGroup = document.getElementById('marketprice-group');
 
-  // ----- Build the solve‑view UI (the only view) -----
+  // ----- Build the solve‑view UI -----
 
-  // ---- Output card ----
+  // Output card
   var solveOutputCard = document.createElement('div');
   solveOutputCard.id = 'card-solve-output';
-  solveOutputCard.className = 'card card-output';   // reuses the responsive grid rules
+  solveOutputCard.className = 'card card-output';
   solveOutputCard.innerHTML = '<h2 id="solve-title"></h2>' +
     '<div class="price-display"><span id="solve-result" class="price-value">\u2014</span></div>';
 
-  // insert at the very top of the main container
   var mainContainer = document.querySelector('.calculator-container');
   if (mainContainer) {
     mainContainer.insertBefore(solveOutputCard, mainContainer.firstChild);
@@ -100,29 +93,55 @@ document.addEventListener('DOMContentLoaded', function () {
     document.body.appendChild(solveOutputCard);
   }
 
-  // ---- Radio group (unknown selector) ----
+  // ---- Option type (call / put) radio group ----
+  var optionTypeWrap = document.createElement('div');
+  optionTypeWrap.className = 'radio-group';
+  optionTypeWrap.style.marginBottom = '0.75em';
+
+  var callLabel = document.createElement('label');
+  callLabel.className = 'radio-label';
+  var callRadio = document.createElement('input');
+  callRadio.type = 'radio';
+  callRadio.name = 'optionType';
+  callRadio.value = 'call';
+  callRadio.id = 'opt-call';
+  callRadio.checked = true;
+  callLabel.appendChild(callRadio);
+  callLabel.appendChild(document.createTextNode(' Call'));
+  optionTypeWrap.appendChild(callLabel);
+
+  var putLabel = document.createElement('label');
+  putLabel.className = 'radio-label';
+  var putRadio = document.createElement('input');
+  putRadio.type = 'radio';
+  putRadio.name = 'optionType';
+  putRadio.value = 'put';
+  putRadio.id = 'opt-put';
+  putLabel.appendChild(putRadio);
+  putLabel.appendChild(document.createTextNode(' Put'));
+  optionTypeWrap.appendChild(putLabel);
+
+  solveOutputCard.appendChild(optionTypeWrap);
+
+  // ---- Unknown selector ----
   var solveSelector = document.createElement('div');
   solveSelector.id = 'solve-selector';
   solveSelector.style.display = 'flex';
   solveSelector.style.flexDirection = 'column';
   solveSelector.style.gap = '0.35em';
-  solveSelector.style.marginTop = '1em';
 
-  // order: S0, K, r, T, sigma, callPrice – Volatility after Time to maturity
+  // Targets: replace 'callPrice' with 'price'
   var targets = [
     { value: 'S0',    label: 'Spot (S\u2080)' },
     { value: 'K',     label: 'Strike (K)' },
     { value: 'r',     label: 'Risk\u2011free rate (r)' },
     { value: 'T',     label: 'Time to maturity (T)' },
     { value: 'sigma', label: 'Volatility (\u03C3)' },
-    { value: 'callPrice', label: 'Call Price (C)' }
+    { value: 'price', label: 'Option Price' }
   ];
 
-  var solveTarget = 'callPrice';   // default unknown
-  var lastCallPrice = null;        // most recent call price computed
-  var lastSigma = null;           // most recent volatility computed
-
-  var supportedTargets = ['callPrice', 'sigma', 'T', 'r', 'K', 'S0'];
+  var solveTarget = 'price';   // default unknown
+  var supportedTargets = ['price', 'sigma', 'T', 'r', 'K', 'S0'];
 
   for (var i = 0; i < targets.length; i++) {
     var t = targets[i];
@@ -140,30 +159,80 @@ document.addEventListener('DOMContentLoaded', function () {
     solveSelector.appendChild(lbl);
   }
 
-  // put the selector inside the output card, below the result number
   solveOutputCard.appendChild(solveSelector);
 
-  // ----- Radio‑change handler (also triggers solve) -----
+  // ----- State variables -----
+  var optionType = 'call';        // call or put
+  var lastCallPrice = null;
+  var lastPutPrice = null;
+  var lastCallSigma = null;       // implied volatility for call
+  var lastPutSigma = null;        // implied volatility for put
+
+  // ----- Radio‑change handler for unknown variable -----
   var solveRadios = solveSelector.querySelectorAll('input[type="radio"]');
   for (var j = 0; j < solveRadios.length; j++) {
     solveRadios[j].addEventListener('change', function (e) {
       solveTarget = e.target.value;
-      // When switching to a variable that is not callPrice, pre‑fill
-      // the market‑price input with the last known callPrice.
-      if (solveTarget !== 'callPrice' && lastCallPrice !== null && !isNaN(lastCallPrice)) {
-        inputs.marketprice.value = lastCallPrice.toFixed(6);
+
+      // When switching to a non‑price target, pre‑fill the market price
+      // with the price of the currently selected option type.
+      if (solveTarget !== 'price') {
+        var priceToUse = (optionType === 'call') ? lastCallPrice : lastPutPrice;
+        if (priceToUse !== null && !isNaN(priceToUse)) {
+          inputs.marketprice.value = priceToUse.toFixed(6);
+        }
       }
-      // When switching to callPrice, pre‑fill the volatility input with the
-      // most recently computed implied volatility (if any).
-      if (solveTarget === 'callPrice' && lastSigma !== null && !isNaN(lastSigma)) {
-        inputs.sigma.value = lastSigma.toFixed(6);
+      // When switching to price, pre‑fill sigma with the last IV computed
+      // for the current option type.
+      if (solveTarget === 'price') {
+        var sigmaToUse = (optionType === 'call') ? lastCallSigma : lastPutSigma;
+        if (sigmaToUse !== null && !isNaN(sigmaToUse)) {
+          inputs.sigma.value = sigmaToUse.toFixed(6);
+        }
       }
+
       updateSolveUIVisibility();
       computeSolve();
     });
   }
 
+  // ----- Option type change handler -----
+  callRadio.addEventListener('change', function () {
+    if (callRadio.checked) {
+      optionType = 'call';
+      updateMarketPriceLabel();
+      // pre‑fill market price / sigma accordingly
+      if (solveTarget !== 'price' && lastCallPrice !== null && !isNaN(lastCallPrice)) {
+        inputs.marketprice.value = lastCallPrice.toFixed(6);
+      } else if (solveTarget === 'price' && lastCallSigma !== null && !isNaN(lastCallSigma)) {
+        inputs.sigma.value = lastCallSigma.toFixed(6);
+      }
+      computeSolve();
+    }
+  });
+  putRadio.addEventListener('change', function () {
+    if (putRadio.checked) {
+      optionType = 'put';
+      updateMarketPriceLabel();
+      if (solveTarget !== 'price' && lastPutPrice !== null && !isNaN(lastPutPrice)) {
+        inputs.marketprice.value = lastPutPrice.toFixed(6);
+      } else if (solveTarget === 'price' && lastPutSigma !== null && !isNaN(lastPutSigma)) {
+        inputs.sigma.value = lastPutSigma.toFixed(6);
+      }
+      computeSolve();
+    }
+  });
+
   // ----- Helper functions -----
+
+  function updateMarketPriceLabel() {
+    var lbl = document.getElementById('marketprice-label');
+    if (lbl) {
+      lbl.innerHTML = optionType === 'call'
+        ? 'Market call price (<i>C</i>)'
+        : 'Market put price (<i>P</i>)';
+    }
+  }
 
   function clearErrors() {
     for (var key in errors) {
@@ -179,9 +248,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  /** Toggle input state so the field being solved is greyed out. */
   function updateSolveUIVisibility() {
-    // enable all inputs first
     for (var k in inputs) {
       if (inputs[k]) {
         inputs[k].disabled = false;
@@ -189,24 +256,17 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
-    // market‑price group is always visible – never hidden
     marketpriceGroup.style.display = '';
     sigmaGroup.style.display = '';
 
     // disable the input that corresponds to the unknown
-    var unknownInput;
-    if (solveTarget === 'callPrice') {
-      unknownInput = inputs.marketprice;
-    } else {
-      unknownInput = inputs[solveTarget];
-    }
+    var unknownInput = (solveTarget === 'price') ? inputs.marketprice : inputs[solveTarget];
     if (unknownInput) {
       unknownInput.disabled = true;
       if (unknownInput.parentNode) unknownInput.parentNode.style.opacity = '0.5';
     }
   }
 
-  // ---- New function: collect discrete dividends ----
   function collectDividends() {
     var rows = dividendsTable.querySelectorAll('tbody tr');
     var dividends = [];
@@ -223,13 +283,10 @@ document.addEventListener('DOMContentLoaded', function () {
     return dividends;
   }
 
-  /** Build a single dividend row. If phantom is true, the row gets
-   *  the 'phantom-row' class and its remove button is hidden via inline style. */
   function createDividendRow(phantom) {
     var tr = document.createElement('tr');
     if (phantom) tr.classList.add('phantom-row');
 
-    // time cell
     var tdTime = document.createElement('td');
     var inpTime = document.createElement('input');
     inpTime.type = 'number';
@@ -239,7 +296,6 @@ document.addEventListener('DOMContentLoaded', function () {
     inpTime.placeholder = phantom ? 'Start typing…' : 'e.g. 0.5';
     tdTime.appendChild(inpTime);
 
-    // amount cell
     var tdAmt = document.createElement('td');
     var inpAmt = document.createElement('input');
     inpAmt.type = 'number';
@@ -249,14 +305,13 @@ document.addEventListener('DOMContentLoaded', function () {
     inpAmt.placeholder = phantom ? 'Start typing…' : 'e.g. 2';
     tdAmt.appendChild(inpAmt);
 
-    // remove button cell
     var tdBtn = document.createElement('td');
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'remove-row-btn';
     btn.textContent = '✕';
     btn.title = 'Remove row';
-    if (phantom) btn.style.display = 'none';   // hidden for phantom rows
+    if (phantom) btn.style.display = 'none';
     tdBtn.appendChild(btn);
 
     tr.appendChild(tdTime);
@@ -265,55 +320,47 @@ document.addEventListener('DOMContentLoaded', function () {
     return tr;
   }
 
-  /** Reset the dividends table to one empty real row + one phantom row. */
   function setupDividendsTable() {
     var tbody = dividendsTable.querySelector('tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
-    // one empty real row
     tbody.appendChild(createDividendRow(false));
-    // one phantom row at the bottom
     tbody.appendChild(createDividendRow(true));
   }
 
-  /** Show/hide the carry fields according to the underlying type. */
   function updateUnderlyingUI() {
     var type = typeSelect.value;
     rfGroup.style.display = (type === 'currency') ? '' : 'none';
     qGroup.style.display  = (type === 'index')    ? '' : 'none';
 
-    // Rename spot label for futures
     spotLabel.innerHTML = (type === 'futures')
       ? 'Futures price (<i>F</i><sub>0</sub>)'
       : 'Spot price (<i>S</i><sub>0</sub>)';
 
-    // dividends group visibility & reset
     if (type === 'equity') {
       dividendsGroup.style.display = '';
       setupDividendsTable();
     } else {
       dividendsGroup.style.display = 'none';
-      // clear any stale rows when not equity
       var tbody = dividendsTable.querySelector('tbody');
       if (tbody) tbody.innerHTML = '';
     }
 
-    // update displayed formulas
-    updateFormulaDisplay(type);
+    updateFormulaDisplay(type, optionType);
   }
 
-  /** Core solve logic – invoked on input changes and radio changes. */
+  // ----- Core solve logic -----
   function computeSolve() {
     clearErrors();
 
-    // ----- set the card title to the current variable name -----
+    // card title
     var nameMap = {
       S0: 'Spot (S\u2080)',
       K: 'Strike (K)',
       r: 'Risk\u2011free rate (r)',
       sigma: 'Volatility (\u03C3)',
       T: 'Time to maturity (T)',
-      callPrice: 'Call Price (C)'
+      price: (optionType === 'call' ? 'Call Price (C)' : 'Put Price (P)')
     };
     var solvedName = nameMap[solveTarget] || solveTarget;
     var titleEl = document.getElementById('solve-title');
@@ -327,9 +374,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var T = parseFloat(inputs.T.value);
     var price = parseFloat(inputs.marketprice.value);
 
-    // ----- Collect carry parameters -----
     var underlyingType = typeSelect.value;
-
     var carryQ = null;
     var carryRf = null;
     if (underlyingType === 'index') {
@@ -345,45 +390,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (carryQ !== null && !isNaN(carryQ)) carryParams.q = carryQ;
     if (carryRf !== null && !isNaN(carryRf)) carryParams.rf = carryRf;
 
-    // ----- manual pre‑validation -----
+    // manual pre‑validation
     var invalid = false;
 
-    if (solveTarget !== 'S0' && (isNaN(S0) || S0 <= 0)) {
-      showError('S0', 'Spot must be > 0.');
-      invalid = true;
-    }
-    if (solveTarget !== 'K' && (isNaN(K) || K <= 0)) {
-      showError('K', 'Strike must be > 0.');
-      invalid = true;
-    }
-    if (solveTarget !== 'r' && isNaN(r)) {
-      showError('r', 'Rate must be a number.');
-      invalid = true;
-    }
-    if (solveTarget !== 'sigma' && (isNaN(sigma) || sigma <= 0)) {
-      showError('sigma', 'Volatility must be > 0.');
-      invalid = true;
-    }
-    if (solveTarget !== 'T' && (isNaN(T) || T <= 0)) {
-      showError('T', 'Time must be > 0.');
-      invalid = true;
-    }
-    if (solveTarget !== 'callPrice') {
+    if (solveTarget !== 'S0' && (isNaN(S0) || S0 <= 0)) { showError('S0', 'Spot must be > 0.'); invalid = true; }
+    if (solveTarget !== 'K'  && (isNaN(K)  || K  <= 0))  { showError('K', 'Strike must be > 0.'); invalid = true; }
+    if (solveTarget !== 'r'  && isNaN(r))                 { showError('r', 'Rate must be a number.'); invalid = true; }
+    if (solveTarget !== 'sigma' && (isNaN(sigma) || sigma <= 0)) { showError('sigma', 'Volatility must be > 0.'); invalid = true; }
+    if (solveTarget !== 'T'  && (isNaN(T)  || T  <= 0))  { showError('T', 'Time must be > 0.'); invalid = true; }
+
+    if (solveTarget !== 'price') {
       if (isNaN(price) || !isFinite(price) || price < 0) {
-        showError('marketprice', 'Market call price must be \u2265 0.');
+        var priceLabel = (optionType === 'call') ? 'Call' : 'Put';
+        showError('marketprice', 'Market ' + priceLabel + ' price must be ≥ 0.');
         invalid = true;
       }
     }
 
-    // ----- Validate carry fields -----
-    if (underlyingType === 'currency' && (isNaN(carryRf) || carryRf < 0)) {
-      showError('rf', 'Foreign rate must be \u2265 0.');
-      invalid = true;
-    }
-    if (underlyingType === 'index' && (isNaN(carryQ) || carryQ < 0)) {
-      showError('q', 'Dividend yield must be \u2265 0.');
-      invalid = true;
-    }
+    if (underlyingType === 'currency' && (isNaN(carryRf) || carryRf < 0)) { showError('rf', 'Foreign rate must be ≥ 0.'); invalid = true; }
+    if (underlyingType === 'index'    && (isNaN(carryQ) || carryQ < 0))   { showError('q', 'Dividend yield must be ≥ 0.'); invalid = true; }
 
     var msgEl = document.getElementById('solve-result');
     if (invalid) {
@@ -392,192 +417,110 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var result;
-    var callObj = null;      // will hold the full price object from black‑scholes
+    var priceObjCall = null;   // will hold pricing object for current type
+    var priceObjPut  = null;
 
     try {
-      if (solveTarget === 'callPrice') {
-        if (typeof blackScholesCallPrice !== 'function') {
-          result = { converged: false, reason: 'Pricing function unavailable.' };
-        } else {
-          var adjusted = computeAdjustedInputs({
-            type: underlyingType,
-            S0: S0, T: T, r: r,
-            q: carryQ,
-            rf: carryRf,
-            dividends: collectDividends()
-          });
-          callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
-          if (!callObj || isNaN(callObj.c)) {
-            result = { converged: false, reason: 'Invalid inputs for option pricing.' };
+      if (solveTarget === 'price') {
+        // compute option price directly
+        var adjusted = computeAdjustedInputs({
+          type: underlyingType,
+          S0: S0, T: T, r: r,
+          q: carryQ,
+          rf: carryRf,
+          dividends: collectDividends()
+        });
+
+        if (optionType === 'put') {
+          priceObjPut = blackScholesPutPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
+          if (priceObjPut && !isNaN(priceObjPut.p)) {
+            result = { converged: true, value: priceObjPut.p, c: priceObjPut.p };
           } else {
-            result = { converged: true, value: callObj.c, c: callObj.c };
+            result = { converged: false, reason: 'Could not compute put price.' };
           }
-        }
-      } else if (solveTarget === 'sigma') {
-        if (typeof solveForVariable !== 'function') {
-          result = { converged: false, reason: 'Solver function unavailable.' };
         } else {
-          var st = solveForVariable({
-            variable: 'sigma',
-            S0: S0, K: K, r: r, sigma: undefined, T: T,
-            marketPrice: price,
-            tolerance: 1e-7,
-            maxIter: 1000,
-            carry: carryParams
-          });
-          if (!st || !st.converged) {
-            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for sigma did not converge.' };
+          priceObjCall = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
+          if (priceObjCall && !isNaN(priceObjCall.c)) {
+            result = { converged: true, value: priceObjCall.c, c: priceObjCall.c };
           } else {
-            // Use adjusted inputs to compute the call price for display
-            var adjusted = computeAdjustedInputs({
-              type: underlyingType, S0: S0, T: T, r: r,
-              q: carryQ, rf: carryRf,
-              dividends: collectDividends()
-            });
-            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, st.value, T);
-            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
-            if (isNaN(result.c)) {
-              result.converged = false;
-              result.reason = 'Could not compute call price with solved sigma.';
-            }
-          }
-        }
-      } else if (solveTarget === 'T') {
-        if (typeof solveForVariable !== 'function') {
-          result = { converged: false, reason: 'Solver function unavailable.' };
-        } else {
-          var st = solveForVariable({
-            variable: 'T',
-            S0: S0, K: K, r: r, sigma: sigma,
-            marketPrice: price,
-            tolerance: 1e-7,
-            maxIter: 1000,
-            carry: carryParams
-          });
-          if (!st || !st.converged) {
-            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for T did not converge.' };
-          } else {
-            var adjusted = computeAdjustedInputs({
-              type: underlyingType, S0: S0, T: st.value, r: r,
-              q: carryQ, rf: carryRf,
-              dividends: collectDividends()
-            });
-            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, st.value);
-            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
-            if (isNaN(result.c)) {
-              result.converged = false;
-              result.reason = 'Could not compute call price with solved T.';
-            }
-          }
-        }
-      } else if (solveTarget === 'S0') {
-        if (typeof solveForVariable !== 'function') {
-          result = { converged: false, reason: 'Solver function unavailable.' };
-        } else {
-          var st = solveForVariable({
-            variable: 'S0',
-            K: K, r: r, sigma: sigma, T: T,
-            marketPrice: price,
-            tolerance: 1e-7,
-            maxIter: 1000,
-            carry: carryParams
-          });
-          if (!st || !st.converged) {
-            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for S0 did not converge.' };
-          } else {
-            var adjusted = computeAdjustedInputs({
-              type: underlyingType, S0: st.value, T: T, r: r,
-              q: carryQ, rf: carryRf,
-              dividends: collectDividends()
-            });
-            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
-            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
-            if (isNaN(result.c)) {
-              result.converged = false;
-              result.reason = 'Could not compute call price with solved S0.';
-            }
-          }
-        }
-      } else if (solveTarget === 'K') {
-        if (typeof solveForVariable !== 'function') {
-          result = { converged: false, reason: 'Solver function unavailable.' };
-        } else {
-          var st = solveForVariable({
-            variable: 'K',
-            S0: S0, r: r, sigma: sigma, T: T,
-            marketPrice: price,
-            tolerance: 1e-7,
-            maxIter: 1000,
-            carry: carryParams
-          });
-          if (!st || !st.converged) {
-            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for K did not converge.' };
-          } else {
-            var adjusted = computeAdjustedInputs({
-              type: underlyingType, S0: S0, T: T, r: r,
-              q: carryQ, rf: carryRf,
-              dividends: collectDividends()
-            });
-            callObj = blackScholesCallPrice(adjusted.S_adj, st.value, adjusted.r_adj, sigma, T);
-            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
-            if (isNaN(result.c)) {
-              result.converged = false;
-              result.reason = 'Could not compute call price with solved K.';
-            }
-          }
-        }
-      } else if (solveTarget === 'r') {
-        if (typeof solveForVariable !== 'function') {
-          result = { converged: false, reason: 'Solver function unavailable.' };
-        } else {
-          var st = solveForVariable({
-            variable: 'r',
-            S0: S0, K: K, sigma: sigma, T: T,
-            marketPrice: price,
-            tolerance: 1e-7,
-            maxIter: 1000,
-            carry: carryParams
-          });
-          if (!st || !st.converged) {
-            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving for r did not converge.' };
-          } else {
-            var adjusted = computeAdjustedInputs({
-              type: underlyingType, S0: S0, T: T, r: st.value,
-              q: carryQ, rf: carryRf,
-              dividends: collectDividends()
-            });
-            callObj = blackScholesCallPrice(adjusted.S_adj, K, adjusted.r_adj, sigma, T);
-            result = { converged: true, value: st.value, c: callObj ? callObj.c : NaN };
-            if (isNaN(result.c)) {
-              result.converged = false;
-              result.reason = 'Could not compute call price with solved r.';
-            }
+            result = { converged: false, reason: 'Could not compute call price.' };
           }
         }
       } else {
-        result = { converged: false, reason: 'Solving for ' + solveTarget + ' is not implemented.' };
+        // solving for a variable using solver
+        if (typeof solveForVariable !== 'function') {
+          result = { converged: false, reason: 'Solver function unavailable.' };
+        } else {
+          var st = solveForVariable({
+            variable: solveTarget,
+            optionType: optionType,
+            S0: S0,
+            K: K,
+            r: r,
+            sigma: sigma,
+            T: T,
+            marketPrice: price,
+            tolerance: 1e-7,
+            maxIter: 1000,
+            carry: carryParams
+          });
+          if (!st || !st.converged) {
+            result = { converged: false, reason: st && st.reason ? st.reason : 'Solving did not converge.' };
+          } else {
+            // use solved variable to compute both call and put prices
+            var solvedValue = st.value;
+            var adjS0 = S0, adjK = K, adjR = r, adjSigma = sigma, adjT = T;
+            if (solveTarget === 'S0')     adjS0   = solvedValue;
+            else if (solveTarget === 'K') adjK    = solvedValue;
+            else if (solveTarget === 'r') adjR    = solvedValue;
+            else if (solveTarget === 'sigma') adjSigma = solvedValue;
+            else if (solveTarget === 'T') adjT    = solvedValue;
+
+            var adjusted = computeAdjustedInputs({
+              type: underlyingType,
+              S0: adjS0, T: adjT, r: adjR,
+              q: carryQ, rf: carryRf,
+              dividends: collectDividends()
+            });
+
+            priceObjCall = blackScholesCallPrice(adjusted.S_adj, adjK, adjusted.r_adj, adjSigma, adjT);
+            priceObjPut  = blackScholesPutPrice(adjusted.S_adj, adjK, adjusted.r_adj, adjSigma, adjT);
+
+            var targetVal = solvedValue;
+            var targetPrice = (optionType === 'put') ? (priceObjPut ? priceObjPut.p : NaN)
+                                                     : (priceObjCall ? priceObjCall.c : NaN);
+            result = { converged: true, value: targetVal, c: targetPrice };
+            // store sigma for possible switching
+            if (solveTarget === 'sigma' && !isNaN(targetVal)) {
+              if (optionType === 'call') lastCallSigma = targetVal; else lastPutSigma = targetVal;
+            }
+          }
+        }
       }
     } catch (e) {
       result = { converged: false, reason: e.message };
     }
 
-    // ----- show only em‑dash for errors (error details are only for debugging) -----
+    var activePriceObj = null;
+    if (optionType === 'put' && priceObjPut && !isNaN(priceObjPut.p)) {
+      activePriceObj = priceObjPut;
+    } else if (optionType === 'call' && priceObjCall && !isNaN(priceObjCall.c)) {
+      activePriceObj = priceObjCall;
+    }
+
+    // update stored prices
+    if (priceObjCall && !isNaN(priceObjCall.c)) lastCallPrice = priceObjCall.c;
+    if (priceObjPut  && !isNaN(priceObjPut.p))   lastPutPrice  = priceObjPut.p;
+
     if (!result.converged) {
       msgEl.textContent = '\u2014';
+      // still update intermediate values to dash
+      setIntermediateValues(null);
       return;
     }
 
-    // store the latest call price
-    if (typeof result.c === 'number' && !isNaN(result.c)) {
-      lastCallPrice = result.c;
-    }
-    // store the latest sigma (if we solved for it)
-    if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
-      lastSigma = result.value;
-    }
-
-    // ---- immediately fill the corresponding input so switching works perfectly ----
-    if (solveTarget === 'callPrice' && typeof result.value === 'number' && !isNaN(result.value)) {
+    // fill inputs with solved value
+    if (solveTarget === 'price' && typeof result.value === 'number' && !isNaN(result.value)) {
       inputs.marketprice.value = result.value.toFixed(6);
     }
     if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
@@ -596,33 +539,13 @@ document.addEventListener('DOMContentLoaded', function () {
       inputs.r.value = result.value.toFixed(6);
     }
 
-    // display the solved value (the card title already shows the variable name)
     msgEl.textContent = result.value.toFixed(6);
 
-    // ----- update intermediate values in the mathematical details card -----
-    var d1El = document.getElementById('output-d1');
-    var d2El = document.getElementById('output-d2');
-    var nd1El = document.getElementById('output-nd1');
-    var nd2El = document.getElementById('output-nd2');
+    // update intermediate values and formula label
+    setIntermediateValues(activePriceObj);
+    updateFormulaDisplay(typeSelect.value, optionType);
 
-    function setDash(el) { if (el) el.textContent = '\u2014'; }
-    function safeNum(v, el) {
-      if (el) el.textContent = (typeof v === 'number' && !isNaN(v)) ? v.toFixed(6) : '\u2014';
-    }
-
-    if (callObj && typeof callObj.d1 !== 'undefined') {
-      safeNum(callObj.d1, d1El);
-      safeNum(callObj.d2, d2El);
-      safeNum(callObj.Nd1, nd1El);
-      safeNum(callObj.Nd2, nd2El);
-    } else {
-      setDash(d1El);
-      setDash(d2El);
-      setDash(nd1El);
-      setDash(nd2El);
-    }
-
-    // ----- compute and display present value of known dividends I -----
+    // compute I (PV of dividends)
     var iEl = document.getElementById('output-i');
     if (iEl) {
       var I_val = null;
@@ -639,19 +562,36 @@ document.addEventListener('DOMContentLoaded', function () {
               I += a_i * Math.exp(-rUsed * t_i);
             }
           }
-          if (I > 0 && isFinite(I)) {
-            I_val = I;
-          }
+          if (I > 0 && isFinite(I)) I_val = I;
         }
       }
       iEl.textContent = (I_val !== null && isFinite(I_val)) ? I_val.toFixed(6) : '\u2014';
     }
-
-    // keep formula display in sync with dividends / underlying type
-    updateFormulaDisplay(typeSelect.value);
   }
 
-  // ----- Attach input listeners (live recalculation) -----
+  function setIntermediateValues(priceObj) {
+    var d1El  = document.getElementById('output-d1');
+    var d2El  = document.getElementById('output-d2');
+    var nd1El = document.getElementById('output-nd1');
+    var nd2El = document.getElementById('output-nd2');
+    function setDash(el) { if (el) el.textContent = '\u2014'; }
+    function safeNum(v, el) {
+      if (el) el.textContent = (typeof v === 'number' && !isNaN(v)) ? v.toFixed(6) : '\u2014';
+    }
+    if (priceObj && typeof priceObj.d1 !== 'undefined') {
+      safeNum(priceObj.d1, d1El);
+      safeNum(priceObj.d2, d2El);
+      safeNum(priceObj.Nd1, nd1El);
+      safeNum(priceObj.Nd2, nd2El);
+    } else {
+      setDash(d1El);
+      setDash(d2El);
+      setDash(nd1El);
+      setDash(nd2El);
+    }
+  }
+
+  // ----- Attach input listeners -----
   for (var key in inputs) {
     if (inputs.hasOwnProperty(key) && inputs[key]) {
       inputs[key].addEventListener('input', function () {
@@ -659,73 +599,103 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
   }
-
-  // rf and q listeners
   if (rfInput) rfInput.addEventListener('input', computeSolve);
   if (qInput)  qInput.addEventListener('input', computeSolve);
 
-  // ----- Attach underlying‑type change handler -----
   typeSelect.addEventListener('change', function () {
     updateUnderlyingUI();
     computeSolve();
   });
 
-  // ----- Update displayed formulas according to underlying type -----
-  function updateFormulaDisplay(type) {
+  // ----- Formula display -----
+  function updateFormulaDisplay(type, optType) {
     var d1Span = document.getElementById('d1-formula');
     var d2Span = document.getElementById('d2-formula');
-    var callSpan = document.getElementById('call-formula');
+    var callSpan  = document.getElementById('call-formula');
+    var priceLabel = document.getElementById('price-formula-label');
     if (!d1Span || !d2Span || !callSpan) return;
 
     var d2Text = '<i>d</i><sub>2</sub> = <i>d</i><sub>1</sub> - <i>&sigma;</i>&radic;<i>T</i>';
-    var d1Text, callText;
+    var d1Text, formulaText;
 
-    // ----- Build formulas -----
     if (type === 'equity') {
       d1Text = '<i>d</i><sub>1</sub> = [ ln((<i>S</i><sub>0</sub> - <i>I</i>)/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
-      callText = '<i>c</i> = (<i>S</i><sub>0</sub> - <i>I</i>) N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      if (optType === 'put') {
+        formulaText = '<i>p</i> = <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(-<i>d</i><sub>2</sub>) - (<i>S</i><sub>0</sub> - <i>I</i>) N(-<i>d</i><sub>1</sub>)';
+      } else {
+        formulaText = '<i>c</i> = (<i>S</i><sub>0</sub> - <i>I</i>) N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      }
     } else if (type === 'currency') {
       d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> - <i>r</i><sub><i>f</i></sub> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
-      callText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>r</i><sub><i>f</i></sub><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      if (optType === 'put') {
+        formulaText = '<i>p</i> = <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(-<i>d</i><sub>2</sub>) - <i>S</i><sub>0</sub> <i>e</i><sup>-<i>r</i><sub><i>f</i></sub><i>T</i></sup> N(-<i>d</i><sub>1</sub>)';
+      } else {
+        formulaText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>r</i><sub><i>f</i></sub><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      }
     } else if (type === 'index') {
       d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> - <i>q</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
-      callText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>q</i><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      if (optType === 'put') {
+        formulaText = '<i>p</i> = <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(-<i>d</i><sub>2</sub>) - <i>S</i><sub>0</sub> <i>e</i><sup>-<i>q</i><i>T</i></sup> N(-<i>d</i><sub>1</sub>)';
+      } else {
+        formulaText = '<i>c</i> = <i>S</i><sub>0</sub> <i>e</i><sup>-<i>q</i><i>T</i></sup> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      }
     } else if (type === 'futures') {
       d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>F</i><sub>0</sub>/<i>K</i>) + (<i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
-      callText = '<i>c</i> = <i>e</i><sup>-<i>r</i><i>T</i></sup> [ <i>F</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> N(<i>d</i><sub>2</sub>) ]';
+      if (optType === 'put') {
+        formulaText = '<i>p</i> = <i>e</i><sup>-<i>r</i><i>T</i></sup> [ <i>K</i> N(-<i>d</i><sub>2</sub>) - <i>F</i><sub>0</sub> N(-<i>d</i><sub>1</sub>) ]';
+      } else {
+        formulaText = '<i>c</i> = <i>e</i><sup>-<i>r</i><i>T</i></sup> [ <i>F</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> N(<i>d</i><sub>2</sub>) ]';
+      }
     } else {
-      // fallback to equity
       d1Text = '<i>d</i><sub>1</sub> = [ ln(<i>S</i><sub>0</sub>/<i>K</i>) + (<i>r</i> + <i>&sigma;</i><sup>2</sup>/2)<i>T</i> ] / [ <i>&sigma;</i>&radic;<i>T</i> ]';
-      callText = '<i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      if (optType === 'put') {
+        formulaText = '<i>p</i> = <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(-<i>d</i><sub>2</sub>) - <i>S</i><sub>0</sub> N(-<i>d</i><sub>1</sub>)';
+      } else {
+        formulaText = '<i>c</i> = <i>S</i><sub>0</sub> N(<i>d</i><sub>1</sub>) - <i>K</i> <i>e</i><sup>-<i>r</i><i>T</i></sup> N(<i>d</i><sub>2</sub>)';
+      }
     }
 
     d1Span.innerHTML = d1Text;
     d2Span.innerHTML = d2Text;
-    callSpan.innerHTML = callText;
+    callSpan.innerHTML = formulaText;
+
+    if (priceLabel) {
+      priceLabel.innerHTML = optType === 'put'
+        ? 'Put value (<i>p</i>) formula:'
+        : 'Call value (<i>c</i>) formula:';
+    }
   }
 
-  // ----- Set sensible default values (demo) -----
+  // ----- Set sensible default values -----
   inputs.S0.value = '100';
   inputs.K.value = '100';
   inputs.r.value = '0.05';
   inputs.sigma.value = '0.2';
   inputs.T.value = '1';
 
-  // Compute a default market price consistent with the default volatility.
   if (typeof blackScholesCallPrice === 'function') {
     var defaultCall = blackScholesCallPrice(100, 100, 0.05, 0.2, 1);
     if (defaultCall && !isNaN(defaultCall.c)) {
       inputs.marketprice.value = defaultCall.c.toFixed(6);
       lastCallPrice = defaultCall.c;
     } else {
-      inputs.marketprice.value = '10.450583'; // fallback
+      inputs.marketprice.value = '10.450583';
       lastCallPrice = 10.450583;
+    }
+  }
+  if (typeof blackScholesPutPrice === 'function') {
+    var defaultPut = blackScholesPutPrice(100, 100, 0.05, 0.2, 1);
+    if (defaultPut && !isNaN(defaultPut.p)) {
+      lastPutPrice = defaultPut.p;
+    } else {
+      lastPutPrice = 5.573526; // fallback
     }
   }
 
   // ----- Initial activation -----
+  updateMarketPriceLabel();
   updateUnderlyingUI();
-  collectDividends(); // ensures the default empty array is ready
+  collectDividends();
   updateSolveUIVisibility();
   computeSolve();
 });
