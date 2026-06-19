@@ -530,6 +530,262 @@
     assert(!res.converged, 'Should fail because adjusted S0 <= 0');
   });
 
+  // ============================================================
+  //  Put implied volatility (variable = 'sigma', optionType = 'put')
+  // ============================================================
+  var putIvTests = [];
+  function putIvTest(name, fn) { putIvTests.push({ name: name, fn: fn }); }
+
+  function solvePutIV(params) {
+    return solveForVariable({
+      variable: 'sigma',
+      optionType: 'put',
+      S0: params.S0,
+      K: params.K,
+      r: params.r,
+      sigma: undefined,
+      T: params.T,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 100,
+      tolerance: params.tolerance || 1e-6
+    });
+  }
+
+  putIvTest('round-trip ATM moderate T', function () {
+    var S0 = 100, K = 100, r = 0.05, sigmaTrue = 0.2, T = 1;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigmaTrue, T).p;
+    var res = solvePutIV({ S0: S0, K: K, r: r, T: T, marketPrice: putPrice });
+    assert(res.converged === true, 'ATM put IV converged');
+    assertAlmostEqual(res.sigma, sigmaTrue, 1e-3, 'ATM put sigma recovered');
+  });
+
+  putIvTest('round-trip deep ITM', function () {
+    var S0 = 80, K = 120, r = 0.02, sigmaTrue = 0.3, T = 0.5;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigmaTrue, T).p;
+    var res = solvePutIV({ S0: S0, K: K, r: r, T: T, marketPrice: putPrice });
+    assert(res.converged === true, 'deep ITM put IV converged');
+    assertAlmostEqual(res.sigma, sigmaTrue, 1e-3, 'deep ITM put sigma recovered');
+  });
+
+  putIvTest('round-trip deep OTM', function () {
+    var S0 = 120, K = 80, r = 0.02, sigmaTrue = 0.25, T = 0.5;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigmaTrue, T).p;
+    var res = solvePutIV({ S0: S0, K: K, r: r, T: T, marketPrice: putPrice });
+    assert(res.converged === true, 'deep OTM put IV converged');
+    assertAlmostEqual(res.sigma, sigmaTrue, 1e-3, 'deep OTM put sigma recovered');
+  });
+
+  putIvTest('invalid S0 = 0', function () {
+    var res = solvePutIV({ S0: 0, K: 100, r: 0.05, T: 1, marketPrice: 10 });
+    assert(res.converged === false && res.reason && res.reason.indexOf('Spot price') !== -1, 'S0=0 reject');
+  });
+
+  putIvTest('negative marketPrice', function () {
+    var res = solvePutIV({ S0: 100, K: 100, r: 0.05, T: 1, marketPrice: -0.1 });
+    assert(res.converged === false && res.reason === 'Market price must be ≥ 0.', 'negative marketPrice reject');
+  });
+
+  putIvTest('no bracket (price too high)', function () {
+    var res = solvePutIV({ S0: 100, K: 100, r: 0.05, T: 1, marketPrice: 200 });
+    assert(res.converged === false && res.reason === 'no_bracket', 'price too high -> no bracket');
+  });
+
+  putIvTest('max iterations', function () {
+    var S0 = 100, K = 100, r = 0.05, sigmaTrue = 0.2, T = 1;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigmaTrue, T).p;
+    var res = solveForVariable({
+      variable: 'sigma',
+      optionType: 'put',
+      S0: S0,
+      K: K,
+      r: r,
+      T: T,
+      marketPrice: putPrice,
+      maxIter: 1,
+      tolerance: 1e-12
+    });
+    assert(res.converged === false && res.reason === 'max_iterations', 'maxIter=1 fails');
+  });
+
+  // ============================================================
+  //  Put implied time (variable = 'T', optionType = 'put')
+  // ============================================================
+  var putTimeTests = [];
+  function putTimeTest(name, fn) { putTimeTests.push({ name: name, fn: fn }); }
+
+  function solvePutT(params) {
+    return solveForVariable({
+      variable: 'T',
+      optionType: 'put',
+      S0: params.S0,
+      K: params.K,
+      r: params.r,
+      sigma: params.sigma,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 100,
+      tolerance: params.tolerance || 1e-6
+    });
+  }
+
+  putTimeTest('round-trip ATM moderate T', function () {
+    var S0 = 100, K = 100, r = 0.05, sigma = 0.2, trueT = 1.0;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigma, trueT).p;
+    var res = solvePutT({ S0: S0, K: K, r: r, sigma: sigma, marketPrice: putPrice });
+    assert(res.converged === true, 'ATM put T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  putTimeTest('round-trip deep OTM', function () {
+    var S0 = 120, K = 80, r = 0.02, sigma = 0.25, trueT = 0.5;
+    var putPrice = blackScholesPutPrice(S0, K, r, sigma, trueT).p;
+    var res = solvePutT({ S0: S0, K: K, r: r, sigma: sigma, marketPrice: putPrice });
+    assert(res.converged === true, 'deep OTM put T converged');
+    assertAlmostEqual(res.value, trueT, 1e-4, 'T recovered');
+  });
+
+  putTimeTest('negative marketPrice', function () {
+    var res = solvePutT({ S0: 100, K: 100, r: 0.05, sigma: 0.2, marketPrice: -5 });
+    assert(res.converged === false && res.reason === 'Market price must be ≥ 0.', 'negative price');
+  });
+
+  putTimeTest('no bracket due to too high price', function () {
+    var res = solvePutT({ S0: 100, K: 200, r: 0.05, sigma: 0.2, marketPrice: 200 });
+    assert(res.converged === false && res.reason === 'no_bracket', 'no bracket');
+  });
+
+  // ============================================================
+  //  Put implied spot (variable = 'S0', optionType = 'put')
+  // ============================================================
+  var putSpotTests = [];
+  function putSpotTest(name, fn) { putSpotTests.push({ name: name, fn: fn }); }
+
+  function solvePutS0(params) {
+    return solveForVariable({
+      variable: 'S0',
+      optionType: 'put',
+      S0: undefined,
+      K: params.K,
+      r: params.r,
+      sigma: params.sigma,
+      T: params.T,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 200,
+      tolerance: params.tolerance || 1e-7
+    });
+  }
+
+  putSpotTest('ATM round-trip', function () {
+    var price = blackScholesPutPrice(100, 100, 0.05, 0.2, 1).p;
+    var res = solvePutS0({ K: 100, r: 0.05, sigma: 0.2, T: 1, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 100, 1e-4);
+  });
+
+  putSpotTest('ITM round-trip', function () {
+    var price = blackScholesPutPrice(80, 100, 0.03, 0.25, 0.5).p;
+    var res = solvePutS0({ K: 100, r: 0.03, sigma: 0.25, T: 0.5, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 80, 1e-4);
+  });
+
+  putSpotTest('OTM round-trip', function () {
+    var price = blackScholesPutPrice(120, 100, 0.02, 0.3, 2).p;
+    var res = solvePutS0({ K: 100, r: 0.02, sigma: 0.3, T: 2, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 120, 1e-4);
+  });
+
+  // ============================================================
+  //  Put implied strike (variable = 'K', optionType = 'put')
+  // ============================================================
+  var putStrikeTests = [];
+  function putStrikeTest(name, fn) { putStrikeTests.push({ name: name, fn: fn }); }
+
+  function solvePutK(params) {
+    return solveForVariable({
+      variable: 'K',
+      optionType: 'put',
+      S0: params.S0,
+      K: undefined,
+      r: params.r,
+      sigma: params.sigma,
+      T: params.T,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 200,
+      tolerance: params.tolerance || 1e-7
+    });
+  }
+
+  putStrikeTest('ITM round-trip', function () {
+    var price = blackScholesPutPrice(100, 120, 0.05, 0.2, 1).p;
+    var res = solvePutK({ S0: 100, r: 0.05, sigma: 0.2, T: 1, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 120, 1e-4);
+  });
+
+  putStrikeTest('OTM round-trip', function () {
+    var price = blackScholesPutPrice(100, 80, 0.05, 0.2, 1).p;
+    var res = solvePutK({ S0: 100, r: 0.05, sigma: 0.2, T: 1, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 80, 1e-4);
+  });
+
+  putStrikeTest('price too high still converges (K can be large)', function () {
+    // 200 is attainable for a put by increasing K far enough.
+    var res = solvePutK({ S0: 100, r: 0.05, sigma: 0.2, T: 1, marketPrice: 200 });
+    assert(res.converged, 'Should converge for high put price');
+    // Expect K around 315 for these parameters
+    assert(res.value > 300 && res.value < 330,
+           'Recovered K should be near 315, got ' + res.value);
+  });
+
+  // ============================================================
+  //  Put implied rate (variable = 'r', optionType = 'put')
+  // ============================================================
+  var putRateTests = [];
+  function putRateTest(name, fn) { putRateTests.push({ name: name, fn: fn }); }
+
+  function solvePutR(params) {
+    return solveForVariable({
+      variable: 'r',
+      optionType: 'put',
+      S0: params.S0,
+      K: params.K,
+      r: undefined,
+      sigma: params.sigma,
+      T: params.T,
+      marketPrice: params.marketPrice,
+      maxIter: params.maxIter || 200,
+      tolerance: params.tolerance || 1e-7
+    });
+  }
+
+  putRateTest('ATM round-trip r=0.05', function () {
+    var price = blackScholesPutPrice(100, 100, 0.05, 0.2, 1).p;
+    var res = solvePutR({ S0: 100, K: 100, sigma: 0.2, T: 1, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 0.05, 1e-4);
+  });
+
+  putRateTest('Negative rate round-trip', function () {
+    var price = blackScholesPutPrice(100, 100, -0.02, 0.2, 1).p;
+    var res = solvePutR({ S0: 100, K: 100, sigma: 0.2, T: 1, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, -0.02, 1e-4);
+  });
+
+  putRateTest('High rate round-trip', function () {
+    var price = blackScholesPutPrice(100, 100, 0.5, 0.2, 0.5).p;
+    var res = solvePutR({ S0: 100, K: 100, sigma: 0.2, T: 0.5, marketPrice: price });
+    assert(res.converged, 'Converged');
+    assertAlmostEqual(res.value, 0.5, 1e-3);
+  });
+
+  putRateTest('negative price failure', function () {
+    var res = solvePutR({ S0: 100, K: 100, sigma: 0.2, T: 1, marketPrice: -1 });
+    assert(!res.converged, 'negative price reject');
+  });
+
   // ---- Update the exports (window) ----
   window.impliedVolatilityTests = tests;
   window.impliedTimeTests = timeTests;
@@ -537,6 +793,12 @@
   window.impliedStrikeTests = strikeTests;
   window.impliedRateTests = rateTests;
   window.impliedDividendTests = dividendTests;
+
+  window.putImpliedVolatilityTests = putIvTests;
+  window.putImpliedTimeTests = putTimeTests;
+  window.putImpliedSpotTests = putSpotTests;
+  window.putImpliedStrikeTests = putStrikeTests;
+  window.putImpliedRateTests = putRateTests;
 
   // ---- Node.js export ----
   if (typeof module !== 'undefined' && module.exports) {
@@ -546,7 +808,12 @@
       'Implied Spot': spotTests,
       'Implied Strike': strikeTests,
       'Implied Rate': rateTests,
-      'Implied Dividends': dividendTests
+      'Implied Dividends': dividendTests,
+      'Put Implied Volatility': putIvTests,
+      'Put Implied Time': putTimeTests,
+      'Put Implied Spot': putSpotTests,
+      'Put Implied Strike': putStrikeTests,
+      'Put Implied Rate': putRateTests
     };
   }
 })();

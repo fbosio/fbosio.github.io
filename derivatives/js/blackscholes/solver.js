@@ -1,7 +1,11 @@
 /**
- * Black-Scholes-Merton European call – variable solver.
- * Requires calculator.js (provides blackScholesCallPrice and validateInputs).
+ * Black-Scholes-Merton European call and put variable solver.
+ * Requires calculator.js (provides blackScholesCallPrice, blackScholesPutPrice and validateInputs).
  * Provides solveForVariable and impliedVolatilityCall.
+ *
+ * Dependency‑inversion principle: the solver does not depend on a particular
+ * pricing function.  The caller supplies `optionType` (`'call'` or `'put'`)
+ * and the solver uses the corresponding pricing function internally.
  */
 
 /* ----------------------------------------------------------------- */
@@ -9,18 +13,20 @@
 /* ----------------------------------------------------------------- */
 
 /**
- * Solve for the given variable so that the Black‑Scholes call price
+ * Solve for the given variable so that the Black‑Scholes price (call or put)
  * equals `marketPrice`.  Bisection is used, which requires a continuous,
- * monotonic relation between the variable and the call price.
+ * monotonic relation between the variable and the option price.
  *
  * @param {Object} input
  * @param {string} input.variable   - One of 'S0','K','r','sigma','T','callPrice'.
- * @param {number} input.S0         - Spot price (ignored if solving for S0).
- * @param {number} input.K          - Strike price (ignored if solving for K).
- * @param {number} input.r          - Risk‑free rate (ignored if solving for r).
- * @param {number} input.sigma      - Volatility (ignored if solving for σ).
- * @param {number} input.T          - Time to maturity (ignored if solving for T).
- * @param {number} input.marketPrice - Observed call price.
+ * @param {string} [input.optionType='call'] - 'call' or 'put'.  Determines which pricing
+ *                                      function is used.
+ * @param {number} input.S0          - Spot price (ignored if solving for S0).
+ * @param {number} input.K           - Strike price (ignored if solving for K).
+ * @param {number} input.r           - Risk‑free rate (ignored if solving for r).
+ * @param {number} input.sigma       - Volatility (ignored if solving for σ).
+ * @param {number} input.T           - Time to maturity (ignored if solving for T).
+ * @param {number} input.marketPrice - Observed option price (call or put).
  * @param {number} [input.maxIter=100] - Maximum bisection iterations.
  * @param {number} [input.tolerance=1e-6] - Convergence tolerance on price error.
  * @param {Object} [input.carry]    - Optional carry‑adjustment parameters.
@@ -29,6 +35,9 @@
  */
 function solveForVariable(input) {
   var variable = input.variable;
+  var optionType = (typeof input.optionType === 'string' &&
+                     (input.optionType === 'call' || input.optionType === 'put'))
+                     ? input.optionType : 'call';
   var S0 = input.S0;
   var K = input.K;
   var r = input.r;
@@ -37,15 +46,19 @@ function solveForVariable(input) {
   var marketPrice = input.marketPrice;
   var maxIter = input.maxIter || 100;
   var tol = input.tolerance || 1e-6;
-  var carry = input.carry || null;                         // new line
+  var carry = input.carry || null;
 
   // ----- helpers -----
   function invalid(reason) {
     return { converged: false, reason: reason };
   }
 
+  // ----- Pick the appropriate pricing function -----
+  var priceFunc = (optionType === 'put') ? blackScholesPutPrice : blackScholesCallPrice;
+
   // ----- Fast path : the variable we are solving for is the call price itself -----
   if (variable === 'callPrice') {
+    // This branch is only meaningful for calls; a put counterpart isn't provided.
     var callObj = blackScholesCallPrice(S0, K, r, sigma, T);
     if (isNaN(callObj.c)) return invalid('Cannot compute call price.');
     return { converged: true, value: callObj.c, c: callObj.c, iterations: 0 };
@@ -67,7 +80,7 @@ function solveForVariable(input) {
     return invalid('Market price must be ≥ 0.');
   }
 
-  // ----- price‑error function f(guess) = C(guess) - marketPrice, with carry adjustment -----
+  // ----- price‑error function f(guess) = C/P(guess) - marketPrice, with carry adjustment -----
   function priceError(guess) {
     var variableS0  = S0,  variableK = K,  variableR = r,  variableSigma = sigma,  variableT = T;
     if (variable === 'S0')    { variableS0  = guess; }
@@ -91,8 +104,8 @@ function solveForVariable(input) {
       adjR = adjusted.r_adj;
     }
 
-    var callObj = blackScholesCallPrice(adjS, variableK, adjR, variableSigma, variableT);
-    return callObj.c - marketPrice;
+    var priceObj = priceFunc(adjS, variableK, adjR, variableSigma, variableT);
+    return priceObj.c !== undefined ? priceObj.c - marketPrice : priceObj.p - marketPrice;
   }
 
   // ----- choose initial bracket -----
@@ -144,18 +157,19 @@ function solveForVariable(input) {
     var fm = f(mid);
     if (isNaN(fm)) return invalid('NaN during bisection.');
     if (Math.abs(fm) <= tol) {
-      // also compute the call price that corresponds to the solved value
-      var callVal;
-      if (variable === 'S0')    callVal = blackScholesCallPrice(mid, K, r, sigma, T);
-      else if (variable === 'K') callVal = blackScholesCallPrice(S0, mid, r, sigma, T);
-      else if (variable === 'r') callVal = blackScholesCallPrice(S0, K, mid, sigma, T);
-      else if (variable === 'sigma') callVal = blackScholesCallPrice(S0, K, r, mid, T);
-      else if (variable === 'T') callVal = blackScholesCallPrice(S0, K, r, sigma, mid);
+      // compute the option price that corresponds to the solved value
+      var priceObj;
+      if (variable === 'S0')    priceObj = priceFunc(mid, K, r, sigma, T);
+      else if (variable === 'K') priceObj = priceFunc(S0, mid, r, sigma, T);
+      else if (variable === 'r') priceObj = priceFunc(S0, K, mid, sigma, T);
+      else if (variable === 'sigma') priceObj = priceFunc(S0, K, r, mid, T);
+      else if (variable === 'T') priceObj = priceFunc(S0, K, r, sigma, mid);
+      var computedPrice = priceObj ? (priceObj.c !== undefined ? priceObj.c : priceObj.p) : NaN;
       return {
         converged: true,
         value: mid,
         sigma: (variable === 'sigma' ? mid : undefined),   // backwards‑compat for old IV caller
-        c: callVal ? callVal.c : NaN,
+        c: computedPrice,
         iterations: iter
       };
     }
