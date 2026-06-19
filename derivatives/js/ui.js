@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (solveTarget === 'price') {
         var sigmaToUse = (optionType === 'call') ? lastCallSigma : lastPutSigma;
         if (sigmaToUse !== null && !isNaN(sigmaToUse)) {
-          inputs.sigma.value = sigmaToUse.toFixed(6);
+          inputs.sigma.value = (sigmaToUse * 100).toFixed(6);
         }
       }
 
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (solveTarget !== 'price' && lastCallPrice !== null && !isNaN(lastCallPrice)) {
         inputs.marketprice.value = lastCallPrice.toFixed(6);
       } else if (solveTarget === 'price' && lastCallSigma !== null && !isNaN(lastCallSigma)) {
-        inputs.sigma.value = lastCallSigma.toFixed(6);
+        inputs.sigma.value = (lastCallSigma * 100).toFixed(6);
       }
       computeSolve();
     }
@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (solveTarget !== 'price' && lastPutPrice !== null && !isNaN(lastPutPrice)) {
         inputs.marketprice.value = lastPutPrice.toFixed(6);
       } else if (solveTarget === 'price' && lastPutSigma !== null && !isNaN(lastPutSigma)) {
-        inputs.sigma.value = lastPutSigma.toFixed(6);
+        inputs.sigma.value = (lastPutSigma * 100).toFixed(6);
       }
       computeSolve();
     }
@@ -369,8 +369,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // raw values
     var S0 = parseFloat(inputs.S0.value);
     var K = parseFloat(inputs.K.value);
-    var r = parseFloat(inputs.r.value);
-    var sigma = parseFloat(inputs.sigma.value);
+    var r = parseFloat(inputs.r.value) / 100;
+    var sigma = parseFloat(inputs.sigma.value) / 100;
     var T = parseFloat(inputs.T.value);
     var price = parseFloat(inputs.marketprice.value);
 
@@ -378,9 +378,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var carryQ = null;
     var carryRf = null;
     if (underlyingType === 'index') {
-      carryQ = parseFloat(qInput.value);
+      carryQ = parseFloat(qInput.value) / 100;
     } else if (underlyingType === 'currency') {
-      carryRf = parseFloat(rfInput.value);
+      carryRf = parseFloat(rfInput.value) / 100;
     }
 
     var carryParams = {
@@ -524,7 +524,7 @@ document.addEventListener('DOMContentLoaded', function () {
       inputs.marketprice.value = result.value.toFixed(6);
     }
     if (solveTarget === 'sigma' && typeof result.value === 'number' && !isNaN(result.value)) {
-      inputs.sigma.value = result.value.toFixed(6);
+      inputs.sigma.value = (result.value * 100).toFixed(6);
     }
     if (solveTarget === 'T' && typeof result.value === 'number' && !isNaN(result.value)) {
       inputs.T.value = result.value.toFixed(6);
@@ -536,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function () {
       inputs.K.value = result.value.toFixed(6);
     }
     if (solveTarget === 'r' && typeof result.value === 'number' && !isNaN(result.value)) {
-      inputs.r.value = result.value.toFixed(6);
+      inputs.r.value = (result.value * 100).toFixed(6);
     }
 
     msgEl.textContent = result.value.toFixed(6);
@@ -551,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var I_val = null;
       if (underlyingType === 'equity') {
         var divs = collectDividends();
-        var rUsed = parseFloat(inputs.r.value);
+        var rUsed = parseFloat(inputs.r.value) / 100;
         var TUsed = parseFloat(inputs.T.value);
         if (!isNaN(rUsed) && !isNaN(TUsed) && TUsed > 0 && rUsed >= 0) {
           var I = 0;
@@ -669,8 +669,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // ----- Set sensible default values -----
   inputs.S0.value = '100';
   inputs.K.value = '100';
-  inputs.r.value = '0.05';
-  inputs.sigma.value = '0.2';
+  inputs.r.value = '5';
+  inputs.sigma.value = '20';
   inputs.T.value = '1';
 
   if (typeof blackScholesCallPrice === 'function') {

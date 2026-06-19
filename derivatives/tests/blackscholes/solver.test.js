@@ -653,8 +653,6 @@
     assert(res.converged === false && res.reason === 'no_bracket', 'no bracket');
   });
 
-<<<<<<< HEAD
-=======
   putTimeTest('round-trip with dividends (ITM put T)', function () {
     var S0 = 40, K = 40, r = 0.09, sigma = 0.292094, Ttrue = 0.6;
     var dividends = [{time: 2/12, amount: 0.5}, {time: 6/12, amount: 0.5}];
@@ -674,7 +672,6 @@
     assertAlmostEqual(res.value, Ttrue, 1e-4, 'T recovered for put with dividends');
   });
 
->>>>>>> aeadb83 (Add put option support to Black-Scholes solver)
   // ============================================================
   //  Put implied spot (variable = 'S0', optionType = 'put')
   // ============================================================

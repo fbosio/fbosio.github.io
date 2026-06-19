@@ -31,13 +31,13 @@
                 </select>
             </div>
             <div class="form-group" id="rf-group" style="display:none;">
-                <label for="input-rf">Foreign rate (<i>r<sub>f</sub></i>)</label>
-                <input type="number" id="input-rf" step="0.0001" value="0.01" />
+                <label for="input-rf">Foreign rate (<i>r<sub>f</sub></i>, %)</label>
+                <input type="number" id="input-rf" step="0.01" value="1" />
                 <span class="error-message" id="error-rf" aria-live="polite"></span>
             </div>
             <div class="form-group" id="q-group" style="display:none;">
-                <label for="input-q">Dividend yield (<i>q</i>)</label>
-                <input type="number" id="input-q" step="0.0001" value="0.01" />
+                <label for="input-q">Dividend yield (<i>q</i>, %)</label>
+                <input type="number" id="input-q" step="0.01" value="1" />
                 <span class="error-message" id="error-q" aria-live="polite"></span>
             </div>
             <div id="dividends-group" style="display:none;">
@@ -71,8 +71,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="input-rate">Risk-free rate (<i>r</i>, continuous compounding)</label>
-                    <input type="number" id="input-rate" name="rate" step="0.0001" placeholder="e.g. 0.05" value="0.05" required>
+                    <label for="input-rate">Risk-free rate (<i>r</i>, continuous compounding, %)</label>
+                    <input type="number" id="input-rate" name="rate" step="0.01" placeholder="e.g. 5" value="5" required>
                     <span class="error-message" id="error-rate" aria-live="polite"></span>
                 </div>
 
@@ -83,8 +83,8 @@
                 </div>
 
                 <div class="form-group" id="sigma-group">
-                    <label for="input-volatility">Volatility (<i>&sigma;</i>, annual, decimal)</label>
-                    <input type="number" id="input-volatility" name="volatility" step="0.01" min="0.01" placeholder="e.g. 0.2" value="0.2" required>
+                    <label for="input-volatility">Volatility (<i>&sigma;</i>, annual, %)</label>
+                    <input type="number" id="input-volatility" name="volatility" step="0.01" min="0.01" placeholder="e.g. 20" value="20" required>
                     <span class="error-message" id="error-volatility" aria-live="polite"></span>
                 </div>
 
