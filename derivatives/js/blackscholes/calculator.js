@@ -1,6 +1,6 @@
 /**
- * Black-Scholes-Merton European call pricing.
- * This module provides d1, d2, validation and call price.
+ * Black-Scholes-Merton European call and put pricing.
+ * This module provides d1, d2, validation, call and put price.
  * Depends on a global normalCdf() function (from normal-cdf.js).
  */
 
@@ -77,12 +77,57 @@ function blackScholesCallPrice(S0, K, r, sigma, T) {
   };
 }
 
+function blackScholesPutPrice(S0, K, r, sigma, T) {
+  var validation = validateInputs({ S0: S0, K: K, r: r, sigma: sigma, T: T });
+  if (validation !== null) {
+    return {
+      p: NaN,
+      d1: NaN,
+      d2: NaN,
+      Nd1: NaN,
+      Nd2: NaN
+    };
+  }
+
+  var d1 = computeD1(S0, K, r, sigma, T);
+  var d2 = computeD2(d1, sigma, T);
+  var Nd1_ = normalCdf(-d1);
+  var Nd2_ = normalCdf(-d2);
+
+  var p = K * Math.exp(-r * T) * Nd2_ - S0 * Nd1_;
+
+  return {
+    p: p,
+    d1: d1,
+    d2: d2,
+    Nd1: Nd1_,
+    Nd2: Nd2_
+  };
+}
+
+// Attach to global object for browser / test runners
+if (typeof window !== 'undefined') {
+  window.computeD1 = computeD1;
+  window.computeD2 = computeD2;
+  window.validateInputs = validateInputs;
+  window.blackScholesCallPrice = blackScholesCallPrice;
+  window.blackScholesPutPrice = blackScholesPutPrice;
+}
+if (typeof global !== 'undefined') {
+  global.computeD1 = computeD1;
+  global.computeD2 = computeD2;
+  global.validateInputs = validateInputs;
+  global.blackScholesCallPrice = blackScholesCallPrice;
+  global.blackScholesPutPrice = blackScholesPutPrice;
+}
+
 // Node.js export
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     computeD1: computeD1,
     computeD2: computeD2,
     validateInputs: validateInputs,
-    blackScholesCallPrice: blackScholesCallPrice
+    blackScholesCallPrice: blackScholesCallPrice,
+    blackScholesPutPrice: blackScholesPutPrice
   };
 }

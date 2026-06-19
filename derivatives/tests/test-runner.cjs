@@ -46,6 +46,7 @@ if (typeof calcMod === 'function') {
   global.computeD1 = global.computeD1 || calcMod.computeD1;
   global.computeD2 = global.computeD2 || calcMod.computeD2;
   global.validateInputs = global.validateInputs || calcMod.validateInputs;
+  global.blackScholesPutPrice = global.blackScholesPutPrice || calcMod.blackScholesPutPrice;
 }
 
 var solverMod = require('../js/blackscholes/solver');
@@ -69,7 +70,7 @@ var totalFailed = 0;
 
 // ---------- Helper to run a test suite ----------
 function runSuite(title, testArray) {
-  console.log('=== ' + title + ' ===');
+  console.log("Hey, let's test " + title + "!");
   var passed = 0;
   var failed = 0;
   for (var i = 0; i < testArray.length; i++) {
@@ -88,22 +89,61 @@ function runSuite(title, testArray) {
   return { passed: passed, failed: failed };
 }
 
-// ---------- Load the test files (they populate the required arrays) ----------
-var normalCdfTests = require('./normal-cdf.test');
-var callValTests = require('./blackscholes/calculator.test');
-var solverTests = require('./blackscholes/solver.test');
-var adjusterTests = require('./carry.test');
+// ---------- Automatic test discovery ----------
+var path = require('path');
+var fs = require('fs');
 
-// ---------- Execute every suite ----------
-runSuite('Normal CDF', normalCdfTests);
-runSuite('Call valuation', callValTests);
-runSuite('Implied Volatility', solverTests.impliedVolatilityTests);
-runSuite('Implied Time', solverTests.impliedTimeTests);
-runSuite('Implied Spot', solverTests.impliedSpotTests);
-runSuite('Implied Strike', solverTests.impliedStrikeTests);
-runSuite('Implied Rate', solverTests.impliedRateTests);
-runSuite('Implied Dividends', solverTests.impliedDividendTests);
-runSuite('Underlying Adjustment', adjusterTests);
+var testsDir = path.join(__dirname, '.');
+var excludedFiles = ['test-utils.js', 'test-runner.cjs', 'test-runner.html'];
+
+function humanize(filename) {
+  // Remove '.test.js' suffix, split by '-' or '_', capitalise each word
+  var name = filename.replace(/\.test\.js$/i, '');
+  return name.replace(/[-_]/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+}
+
+function collectTestFiles(dir) {
+  var results = [];
+  var list = fs.readdirSync(dir);
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    var fullPath = path.join(dir, item);
+    if (fs.statSync(fullPath).isDirectory()) {
+      results = results.concat(collectTestFiles(fullPath));
+    } else if (/\.test\.js$/i.test(item) && excludedFiles.indexOf(item) === -1) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+var testFiles = collectTestFiles(testsDir);
+
+for (var f = 0; f < testFiles.length; f++) {
+  var filePath = testFiles[f];
+  // compute relative path starting from the tests folder
+  var relPath = path.relative(testsDir, filePath);
+  var exported = require('./' + relPath);
+  if (Array.isArray(exported)) {
+    // plain array → suite named after the file
+    var suiteName = humanize(path.basename(filePath));
+    runSuite(suiteName, exported);
+  } else if (typeof exported === 'object' && exported !== null) {
+    var keys = Object.keys(exported);
+    // if keys look like numeric indices, treat as an array‑like single suite
+    if (keys.length > 0 && /^\d+$/.test(keys[0])) {
+      var suiteName = humanize(path.basename(filePath));
+      var testsArr = [];
+      for (var k = 0; k < keys.length; k++) testsArr.push(exported[keys[k]]);
+      runSuite(suiteName, testsArr);
+    } else {
+      // named suites – each key is the suite name
+      for (var k = 0; k < keys.length; k++) {
+        runSuite(keys[k], exported[keys[k]]);
+      }
+    }
+  }
+}
 
 // ---------- Set exit code for CI / aider ----------
 process.exitCode = totalFailed > 0 ? 1 : 0;

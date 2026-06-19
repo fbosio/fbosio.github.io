@@ -78,10 +78,51 @@
     assert(p2 > p1, "Price increases with volatility");
   });
 
-  window.blackScholesTests = tests;
-  window.callValuationTests = tests;
+  var callTests = tests.slice();
+  tests = [];
+
+  // ============================================================
+  //  Put valuation
+  // ============================================================
+  test("Put: Classic at-the-money benchmark", function() {
+    var result = blackScholesPutPrice(100, 100, 0.05, 0.2, 1);
+    // Parity: call = 10.45058, put = call - S0 + K*exp(-rT) = 5.573522
+    assertAlmostEqual(result.p, 5.573522, 1e-4, "Put price");
+  });
+
+  test("Put: Parity with call price", function() {
+    var S0 = 100, K = 100, r = 0.05, sigma = 0.2, T = 1;
+    var call = blackScholesCallPrice(S0, K, r, sigma, T);
+    var put = blackScholesPutPrice(S0, K, r, sigma, T);
+    var parityPut = call.c - S0 + K * Math.exp(-r * T);
+    assertAlmostEqual(put.p, parityPut, 1e-4, "Parity holds");
+  });
+
+  test("Put: Deep in the money (put)", function() {
+    var result = blackScholesPutPrice(50, 100, 0.05, 0.2, 1);
+    assert(result.p > 45, "Put price should be high");
+  });
+
+  test("Put: Deep out of the money (put)", function() {
+    var result = blackScholesPutPrice(150, 100, 0.05, 0.2, 1);
+    assert(result.p < 1, "Put price should be small");
+  });
+
+  test("Put: Invalid S0 = 0 returns NaN", function() {
+    var result = blackScholesPutPrice(0, 100, 0.05, 0.2, 1);
+    assert(isNaN(result.p), "Put price should be NaN");
+    assert(isNaN(result.d1), "d1 should be NaN");
+  });
+
+  var putTests = tests;
+
+  window.callTests = callTests;
+  window.putTests = putTests;
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = tests;
+    module.exports = {
+      'Call valuation': callTests,
+      'Put valuation': putTests
+    };
   }
 })();

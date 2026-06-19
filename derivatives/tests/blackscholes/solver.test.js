@@ -541,12 +541,12 @@
   // ---- Node.js export ----
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-      impliedVolatilityTests: tests,
-      impliedTimeTests: timeTests,
-      impliedSpotTests: spotTests,
-      impliedStrikeTests: strikeTests,
-      impliedRateTests: rateTests,
-      impliedDividendTests: dividendTests
+      'Implied Volatility': tests,
+      'Implied Time': timeTests,
+      'Implied Spot': spotTests,
+      'Implied Strike': strikeTests,
+      'Implied Rate': rateTests,
+      'Implied Dividends': dividendTests
     };
   }
 })();
