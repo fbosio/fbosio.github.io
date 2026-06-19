@@ -94,7 +94,7 @@ var path = require('path');
 var fs = require('fs');
 
 var testsDir = path.join(__dirname, '.');
-var excludedFiles = ['test-utils.js', 'test-runner.cjs', 'test-runner.html'];
+var excludedFiles = ['test-utils.js', 'test-runner.cjs'];
 
 function humanize(filename) {
   // Remove '.test.js' suffix, split by '-' or '_', capitalise each word
